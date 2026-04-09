@@ -1,4 +1,2 @@
-gradio
-requests
-pandas
+-e .
 pytest
