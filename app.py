@@ -1,23 +1,43 @@
 import os
-import gradio as gr
-import requests
-import inspect
-import pandas as pd
+from pathlib import Path
 
-# (Keep Constants as is)
+import gradio as gr
+import pandas as pd
+import requests
+
+from gaia_agent.api_client import GaiaApiClient
+from gaia_agent.config import Config
+from gaia_agent.graph import build_graph
+from gaia_agent.models import get_cheap_model, get_strong_model
+from gaia_agent.nodes.perception import make_perception_node
+from gaia_agent.runner import run_agent_on_questions
+from gaia_agent.tools import build_tools
+
 # --- Constants ---
 DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
 
-# --- Basic Agent Definition ---
-# ----- THIS IS WERE YOU CAN BUILD WHAT YOU WANT ------
-class BasicAgent:
-    def __init__(self):
-        print("BasicAgent initialized.")
-    def __call__(self, question: str) -> str:
-        print(f"Agent received question (first 50 chars): {question[:50]}...")
-        fixed_answer = "This is a default answer."
-        print(f"Agent returning fixed answer: {fixed_answer}")
-        return fixed_answer
+
+class GaiaAgent:
+    """Plan → Tiered-Execute → Verify agent built on LangGraph."""
+
+    def __init__(self, cfg: Config | None = None, client=None) -> None:
+        self.cfg = cfg or Config.from_env()
+        self.client = client if client is not None else GaiaApiClient(self.cfg.api_url)
+        self.tools = build_tools(self.cfg)
+        self.cheap = get_cheap_model(self.cfg)
+        self.strong = get_strong_model(self.cfg)
+        file_dir = Path(self.cfg.checkpoint_dir) / "files"
+        file_dir.mkdir(parents=True, exist_ok=True)
+        perception = make_perception_node(self.client, file_dir)
+        self.graph = build_graph(
+            perception_node=perception,
+            planner_model=self.strong,
+            executor_model_s1=self.cheap,
+            executor_model_s2=self.strong,
+            verifier_model=self.strong,
+            tools=self.tools,
+        )
+        print("GaiaAgent initialized.")
 
 def run_and_submit_all( profile: gr.OAuthProfile | None):
     """
@@ -38,9 +58,9 @@ def run_and_submit_all( profile: gr.OAuthProfile | None):
     questions_url = f"{api_url}/questions"
     submit_url = f"{api_url}/submit"
 
-    # 1. Instantiate Agent ( modify this part to create your agent)
+    # 1. Instantiate Agent
     try:
-        agent = BasicAgent()
+        agent = GaiaAgent()
     except Exception as e:
         print(f"Error instantiating agent: {e}")
         return f"Error initializing agent: {e}", None
@@ -51,9 +71,7 @@ def run_and_submit_all( profile: gr.OAuthProfile | None):
     # 2. Fetch Questions
     print(f"Fetching questions from: {questions_url}")
     try:
-        response = requests.get(questions_url, timeout=15)
-        response.raise_for_status()
-        questions_data = response.json()
+        questions_data = agent.client.get_questions()
         if not questions_data:
              print("Fetched questions list is empty.")
              return "Fetched questions list is empty or invalid format.", None
@@ -61,31 +79,25 @@ def run_and_submit_all( profile: gr.OAuthProfile | None):
     except requests.exceptions.RequestException as e:
         print(f"Error fetching questions: {e}")
         return f"Error fetching questions: {e}", None
-    except requests.exceptions.JSONDecodeError as e:
-         print(f"Error decoding JSON response from questions endpoint: {e}")
-         print(f"Response text: {response.text[:500]}")
-         return f"Error decoding server response for questions: {e}", None
     except Exception as e:
         print(f"An unexpected error occurred fetching questions: {e}")
         return f"An unexpected error occurred fetching questions: {e}", None
 
-    # 3. Run your Agent
-    results_log = []
-    answers_payload = []
+    # 3. Run the agent with checkpointing
     print(f"Running agent on {len(questions_data)} questions...")
-    for item in questions_data:
-        task_id = item.get("task_id")
-        question_text = item.get("question")
-        if not task_id or question_text is None:
-            print(f"Skipping item with missing task_id or question: {item}")
-            continue
-        try:
-            submitted_answer = agent(question_text)
-            answers_payload.append({"task_id": task_id, "submitted_answer": submitted_answer})
-            results_log.append({"Task ID": task_id, "Question": question_text, "Submitted Answer": submitted_answer})
-        except Exception as e:
-             print(f"Error running agent on task {task_id}: {e}")
-             results_log.append({"Task ID": task_id, "Question": question_text, "Submitted Answer": f"AGENT ERROR: {e}"})
+    answers_payload = run_agent_on_questions(
+        agent.graph, questions_data, agent.cfg.checkpoint_dir
+    )
+    answers_by_id = {a["task_id"]: a["submitted_answer"] for a in answers_payload}
+    results_log = [
+        {
+            "Task ID": item.get("task_id"),
+            "Question": item.get("question"),
+            "Submitted Answer": answers_by_id.get(item.get("task_id"), ""),
+        }
+        for item in questions_data
+        if item.get("task_id") and item.get("question") is not None
+    ]
 
     if not answers_payload:
         print("Agent did not produce any answers to submit.")
