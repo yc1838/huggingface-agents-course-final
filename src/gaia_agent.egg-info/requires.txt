@@ -1,6 +1,0 @@
-gradio
-requests
-httpx
-langgraph
-langchain-core
-python-dotenv
