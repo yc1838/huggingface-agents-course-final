@@ -5,11 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gaia-agent"
 version = "0.0.0"
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
   "gradio",
   "requests",
   "pandas",
+  "langgraph",
+  "langchain-core",
 ]
 
 [tool.setuptools]

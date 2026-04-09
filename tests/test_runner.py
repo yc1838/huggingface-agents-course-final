@@ -30,14 +30,14 @@ def test_runner_invokes_graph_and_writes_checkpoint(tmp_path):
             "task_id": "task-1",
             "question": "What is 2+2?",
             "file_path": None,
-            "modality": None,
+            "modality": "text",
             "plan": [],
             "step_idx": 0,
             "observations": [],
-            "draft_answer": "",
-            "critique": "",
+            "draft_answer": None,
+            "critique": None,
             "retries": 0,
-            "final_answer": "",
+            "final_answer": None,
         }
     ]
     checkpoint = json.loads((tmp_path / "task-1.json").read_text())
@@ -48,7 +48,7 @@ def test_runner_invokes_graph_and_writes_checkpoint(tmp_path):
 def test_runner_uses_checkpoint_without_invoking_graph(tmp_path):
     checkpoint_path = tmp_path / "task-2.json"
     checkpoint_path.write_text(
-        json.dumps({"task_id": "task-2", "final_answer": "cached"})
+        json.dumps({"task_id": "task-2", "submitted_answer": "cached", "final_answer": "stale"})
     )
     graph = RecordingGraph({"final_answer": "fresh"})
     questions = [{"task_id": "task-2", "question": "Ignored"}]
@@ -88,3 +88,17 @@ def test_runner_records_agent_errors(tmp_path):
     assert len(answers) == 1
     assert answers[0]["task_id"] == "task-3"
     assert answers[0]["submitted_answer"].startswith("AGENT ERROR: boom")
+
+
+def test_runner_uses_final_answer_when_cached_submitted_answer_missing(tmp_path):
+    checkpoint_path = tmp_path / "task-4.json"
+    checkpoint_path.write_text(json.dumps({"task_id": "task-4", "final_answer": "fallback"}))
+    graph = RecordingGraph({"final_answer": "fresh"})
+
+    answers = run_agent_on_questions(
+        graph,
+        [{"task_id": "task-4", "question": "Ignored"}],
+        tmp_path,
+    )
+
+    assert answers == [{"task_id": "task-4", "submitted_answer": "fallback"}]

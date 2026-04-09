@@ -42,7 +42,7 @@ def run_agent_on_questions(graph: Any, questions: list[dict], checkpoint_dir: st
             continue
 
         checkpoint = {**state, **result}
-        submitted_answer = checkpoint.get("final_answer", "")
+        submitted_answer = checkpoint.get("final_answer") or ""
         checkpoint["submitted_answer"] = submitted_answer
         checkpoint_path.write_text(json.dumps(checkpoint, indent=2, sort_keys=True))
         answers.append({"task_id": task_id, "submitted_answer": submitted_answer})
