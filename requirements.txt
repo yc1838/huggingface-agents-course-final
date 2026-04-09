@@ -1,2 +1,4 @@
 gradio
 requests
+pandas
+pytest
