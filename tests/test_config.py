@@ -25,10 +25,12 @@ def test_config_from_env_uses_defaults(monkeypatch):
     assert config.strong_model == "claude-sonnet-4-6"
     assert config.api_url == "https://agents-course-unit4-scoring.hf.space"
     assert config.checkpoint_dir == ".checkpoints"
+    assert config.whisper_model == "base"
     assert config.anthropic_api_key == ""
     assert config.google_api_key == ""
     assert config.huggingface_api_key == ""
     assert config.tavily_api_key == ""
+    assert config.lmstudio_base_url == ""
 
 
 def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
@@ -42,6 +44,8 @@ def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
     monkeypatch.setenv("GAIA_GOOGLE_API_KEY", "goog-key")
     monkeypatch.setenv("GAIA_HUGGINGFACE_API_KEY", "hf-key")
     monkeypatch.setenv("GAIA_TAVILY_API_KEY", "tv-key")
+    monkeypatch.setenv("GAIA_WHISPER_MODEL", "small")
+    monkeypatch.setenv("GAIA_LMSTUDIO_BASE_URL", "http://host:1234/v1")
 
     config = Config.from_env()
 
@@ -52,8 +56,10 @@ def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
         strong_model="gemini-pro",
         api_url="https://example.test",
         checkpoint_dir="/tmp/checkpoints",
+        whisper_model="small",
         anthropic_api_key="anth-key",
         google_api_key="goog-key",
         huggingface_api_key="hf-key",
         tavily_api_key="tv-key",
+        lmstudio_base_url="http://host:1234/v1",
     )
