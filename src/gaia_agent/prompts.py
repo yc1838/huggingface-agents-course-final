@@ -34,7 +34,7 @@ ORCHESTRATOR_SYSTEM = (
 BASE_EXECUTOR = (
     "You are the execution component for a GAIA-style agent. "
     "Your goal is to execute the current step of the plan. "
-    "Be concise. No yapping. No fluff.\n"
+    "Be concise. No yapping. No fluff. ONLY output the tool call or the DRAFT answer.\n"
     "You have these tools: tavily_search, fetch_url, run_python, read_file, transcribe_audio, "
     "youtube_transcript, inspect_pdf, inspect_visual_content.\n\n"
 )
@@ -53,7 +53,8 @@ AUDIO_SPECIALIST = (
     "DOMAIN: AUDIO ANALYSIS\n"
     "RULES:\n"
     "1. Use 'transcribe_audio' for any task involving speech or sound identification in audio files.\n"
-    "2. If the question asks about a specific sound (e.g., 'is there a bird chirping?'), transcribe first to see if the model picks up ambient sound tags, OR use 'run_python' to analyze the audio metadata if needed."
+    "2. FILE LOCATION: If an audio file is mentioned, it is likely in `.checkpoints/files/`. Use 'run_python' to find the exact path if needed.\n"
+    "3. If the question asks about a specific sound, transcribe first to see ambient tags (e.g., [bird chirping])."
 )
 
 RESEARCH_SPECIALIST = (
@@ -73,11 +74,18 @@ VISION_SPECIALIST = (
 )
 
 FILE_SPECIALIST = (
-    "DOMAIN: FILE READING\n"
-    "RULES:\n"
-    "1. You MUST use the exact 'File:' path provided in the context. Do NOT guess paths like 'data/'.\n"
-    "2. For Excel/CSV, 'read_file' will return a CSV-formatted string. Use it for your context.\n"
-    "3. For structured data, use 'run_python' to filter or query the data precisely instead of reading it all yourself if it's long."
+    "DOMAIN: FILE & DATA READING\n"
+    "CRITICAL FILE LOCATION RULE:\n"
+    "When a task mentions an attached file (e.g., .xlsx, .mp3, .py, .pdf), the system has ALREADY downloaded it. "
+    "The files are NEVER in the root directory. They are ALWAYS located inside the `.checkpoints/files/` directory.\n"
+    "You MUST ALWAYS use the 'run_python' tool to search for the file's exact path before attempting to open it.\n"
+    "Example search radar:\n"
+    "import os\n"
+    "for root, dirs, files in os.walk('.checkpoints/files'):\n"
+    "    for f in files:\n"
+    "        if f.endswith('.xlsx'): # change extension\n"
+    "            print('FOUND:', os.path.join(root, f))\n"
+    "Do NOT guess. Find the file, read it (via 'read_file' or 'python'), and then answer."
 )
 
 GENERAL_EXECUTOR = (
