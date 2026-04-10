@@ -42,17 +42,13 @@ def make_reflector_node(model):
             parts = raw_content.split("UPDATED WORKING MEMORY:")
             new_memory = parts[1].split("MATCH FOUND:")[0].strip()
         
-        # Check for Early Exit — but ONLY if we're at or past the last plan step.
-        # If there are remaining plan steps (e.g., cross-verification), do NOT exit early.
+        # Check for Early Exit
         draft_answer = None
-        remaining_steps = len(state["plan"]) - state["step_idx"]
-        if "MATCH FOUND:" in raw_content and remaining_steps <= 1:
+        if "MATCH FOUND:" in raw_content:
             match = re.search(r"MATCH FOUND:\s*(.*)", raw_content)
             if match:
                 draft_answer = match.group(1).strip()
                 log.info("[reflector] EARLY EXIT TRIGGERED: %s", draft_answer)
-        elif "MATCH FOUND:" in raw_content:
-            log.info("[reflector] MATCH FOUND detected but %d plan steps remain — suppressing early exit", remaining_steps)
 
         return {
             "working_memory": new_memory,
