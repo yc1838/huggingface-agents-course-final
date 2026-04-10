@@ -99,7 +99,7 @@ RESEARCH_SPECIALIST = (
     "    res = requests.get(url, headers=headers)\n"
     "    if res.status_code == 200:\n"
     "        papers = [p for p in res.json().get('data', []) if p.get('year')]\n"
-    "        papers.sort(key=lambda x: (x.get('year', 9999), x.get('publicationDate') or '9999'))\n"
+    "        papers.sort(key=lambda x: (x.get('year', 9999), x.get('publicationDate') or '0000'))  # None dates sort FIRST (earliest)\n"
     "        for p in papers[:5]: print(p['year'], p.get('publicationDate',''), p['title'])\n"
     "        print('FIRST PAPER:', papers[0]['title'])\n"
     "        break\n"

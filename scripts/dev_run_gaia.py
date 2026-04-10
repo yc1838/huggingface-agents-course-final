@@ -137,7 +137,11 @@ def main() -> None:
         tid = q["task_id"]
         got = answers_by_id.get(tid, "")
         expected = q.get("expected_answer", "")
-        ok = str(got).strip().lower() == str(expected).strip().lower()
+        # Normalize: case-insensitive, strip whitespace, hyphens→spaces
+        # (matches GAIA's quasi-exact-match with punctuation normalization)
+        def _norm(s: str) -> str:
+            return str(s).strip().lower().replace("-", " ")
+        ok = _norm(got) == _norm(expected)
         if ok:
             correct += 1
         else:
