@@ -8,6 +8,7 @@ Modality = Literal["text", "web", "youtube", "pdf", "excel", "csv", "docx", "aud
 
 
 class PlanStep(TypedDict):
+    thought: str
     description: str
     tier: Tier
 
@@ -27,6 +28,7 @@ class AgentState(TypedDict):
     plan: list[PlanStep]
     step_idx: int
     observations: list[Observation]
+    working_memory: str
     draft_answer: str | None
     critique: str | None
     current_domain: str | None
@@ -44,6 +46,7 @@ def new_state(task_id: str, question: str) -> AgentState:
         plan=[],
         step_idx=0,
         observations=[],
+        working_memory="",
         draft_answer=None,
         critique=None,
         current_domain=None,

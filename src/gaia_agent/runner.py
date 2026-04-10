@@ -31,7 +31,7 @@ def run_agent_on_questions(graph: Any, questions: list[dict], checkpoint_dir: st
 
         state = new_state(task_id=task_id, question=prompt)
         try:
-            result = graph.invoke(state, {"recursion_limit": 25})
+            result = graph.invoke(state, {"recursion_limit": 30})
         except Exception as exc:  # pragma: no cover - exercised in tests
             answers.append(
                 {

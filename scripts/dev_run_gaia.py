@@ -58,7 +58,7 @@ def main() -> None:
     )
     # suppress noisy third-party loggers unless verbose
     if not args.verbose:
-        for noisy in ("httpx", "httpcore", "langchain_core", "openai", "urllib3"):
+        for noisy in ("httpx", "httpcore", "langchain_core", "openai", "urllib3", "google_genai"):
             logging.getLogger(noisy).setLevel(logging.WARNING)
 
     token = os.getenv("HF_TOKEN") or os.getenv("GAIA_HUGGINGFACE_API_KEY")

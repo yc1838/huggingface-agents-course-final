@@ -30,20 +30,32 @@ def make_planner_node(model):
         raw = extract_text(response.content)
         log.debug("[planner] raw response:\n%s", raw)
         payload = extract_json(raw)
-        log.info("[planner] plan steps: %s", [s["description"] for s in payload.get("plan", [])])
+        if not isinstance(payload, dict):
+            log.warning("[planner] payload is not a dict: %r", payload)
+            payload = {"plan": []}
+
+        plan_raw = payload.get("plan", [])
+        if not isinstance(plan_raw, list):
+            plan_raw = []
+
+        log.info("[planner] plan steps: %s", [s.get("description", str(s)) if isinstance(s, dict) else str(s) for s in plan_raw])
         plan = []
-        for step in payload.get("plan", []):
+        for step in plan_raw:
             if isinstance(step, dict):
+                thought = step.get("thought", "No rationale provided.")
                 description = step.get("description", str(step))
                 tier = step.get("tier", "S1")
             else:
+                thought = "No rationale provided."
                 description = str(step)
                 tier = "S1"
-            plan.append({"description": description, "tier": tier})
+            plan.append({"thought": thought, "description": description, "tier": tier})
+
         return {
             "plan": plan,
             "step_idx": 0,
             "observations": [],
+            "working_memory": "",
             "draft_answer": None,
             "critique": None,
         }

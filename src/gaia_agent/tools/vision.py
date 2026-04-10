@@ -9,9 +9,8 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from gaia_agent.config import Config
 
 
-def inspect_visual_content(file_path_or_url: str, prompt: str) -> str:
+def inspect_visual_content(file_path_or_url: str, prompt: str, cfg: Config) -> str:
     """Use Gemini Multimodal Vision to analyze an image (PNG, JPG) or video (MP4)."""
-    cfg = Config.from_env()
     # Use a strong model for vision tasks
     model = ChatGoogleGenerativeAI(
         model=cfg.strong_model, 

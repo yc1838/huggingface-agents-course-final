@@ -29,7 +29,10 @@ def build_tools(cfg: Config) -> list[BaseTool]:
 
     @tool
     def run_python(code: str, timeout: int = 30) -> str:
-        """Run Python code in a sandboxed subprocess and return stdout + last expression."""
+        """Run Python code in a sandboxed subprocess and return stdout + last expression.
+        CRITICAL: If you use this tool to scrape websites (e.g., Wikipedia), you MUST include a 'User-Agent' header to avoid 403 Forbidden errors.
+        Example: headers = {'User-Agent': 'Mozilla/5.0...'}
+        """
         return _run_python(code, timeout=timeout)
 
     @tool
@@ -50,7 +53,7 @@ def build_tools(cfg: Config) -> list[BaseTool]:
     @tool
     def inspect_visual_content(file_path_or_url: str, prompt: str) -> str:
         """Use Gemini Multimodal Vision to analyze an image (PNG, JPG) or video (MP4). Use this for counting objects on screen or identifying visual details."""
-        return _inspect_visual_content(file_path_or_url, prompt=prompt)
+        return _inspect_visual_content(file_path_or_url, prompt=prompt, cfg=cfg)
 
     @tool
     def youtube_transcript(url: str) -> str:
