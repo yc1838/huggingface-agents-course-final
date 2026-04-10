@@ -20,6 +20,7 @@ def _cfg(**overrides):
         huggingface_api_key="",
         tavily_api_key="",
         lmstudio_base_url="",
+        max_tokens=1024,
     )
     base.update(overrides)
     return Config(**base)
@@ -29,7 +30,7 @@ def test_get_cheap_model_ollama():
     with patch("gaia_agent.models.ChatOllama") as mock_cls:
         mock_cls.return_value = MagicMock()
         model = get_cheap_model(_cfg())
-        mock_cls.assert_called_once_with(model="gemma3:4b")
+        mock_cls.assert_called_once_with(model="gemma3:4b", num_predict=1024)
         assert model is mock_cls.return_value
 
 
@@ -38,7 +39,7 @@ def test_get_strong_model_anthropic():
         mock_cls.return_value = MagicMock()
         get_strong_model(_cfg())
         mock_cls.assert_called_once_with(
-            model="claude-sonnet-4-6", api_key="sk-ant-xxx"
+            model="claude-sonnet-4-6", api_key="sk-ant-xxx", max_tokens=1024
         )
 
 
@@ -51,7 +52,7 @@ def test_get_strong_model_google():
     with patch("gaia_agent.models.ChatGoogleGenerativeAI") as mock_cls:
         mock_cls.return_value = MagicMock()
         get_strong_model(cfg)
-        mock_cls.assert_called_once_with(model="gemini-2.5-pro", google_api_key="gkey")
+        mock_cls.assert_called_once_with(model="gemini-2.5-pro", google_api_key="gkey", max_output_tokens=1024)
 
 
 def test_unknown_provider_raises():
@@ -62,13 +63,17 @@ def test_unknown_provider_raises():
 
 def test_get_cheap_model_lmstudio_default_base_url():
     cfg = _cfg(cheap_provider="lmstudio", cheap_model="qwen2.5-7b-instruct")
-    with patch("gaia_agent.models.ChatOpenAI") as mock_cls:
-        mock_cls.return_value = MagicMock()
+    with patch("gaia_agent.models.ChatOpenAI") as mock_openai, \
+         patch("gaia_agent.models._NoThinkWrapper") as mock_wrapper:
+        mock_openai.return_value = MagicMock()
+        mock_wrapper.return_value = MagicMock()
         get_cheap_model(cfg)
-        mock_cls.assert_called_once_with(
+        mock_openai.assert_called_once_with(
             model="qwen2.5-7b-instruct",
             base_url="http://localhost:1234/v1",
             api_key="lm-studio",
+            temperature=0,
+            max_tokens=1024,
         )
 
 
@@ -78,11 +83,15 @@ def test_get_cheap_model_lmstudio_custom_base_url():
         cheap_model="llama-3.3-70b",
         lmstudio_base_url="http://192.168.1.10:1234/v1",
     )
-    with patch("gaia_agent.models.ChatOpenAI") as mock_cls:
-        mock_cls.return_value = MagicMock()
+    with patch("gaia_agent.models.ChatOpenAI") as mock_openai, \
+         patch("gaia_agent.models._NoThinkWrapper") as mock_wrapper:
+        mock_openai.return_value = MagicMock()
+        mock_wrapper.return_value = MagicMock()
         get_cheap_model(cfg)
-        mock_cls.assert_called_once_with(
+        mock_openai.assert_called_once_with(
             model="llama-3.3-70b",
             base_url="http://192.168.1.10:1234/v1",
             api_key="lm-studio",
+            temperature=0,
+            max_tokens=1024,
         )

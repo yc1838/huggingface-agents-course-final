@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-import json
-import re
+import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from gaia_agent.json_utils import extract_json
+from gaia_agent.llm_utils import extract_text
 from gaia_agent.prompts import VERIFIER_SYSTEM
 
-MAX_RETRIES = 2
-_JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
-
-
-def _extract_json(text: str) -> dict:
-    match = _JSON_BLOCK.search(text)
-    if match is None:
-        return {"decision": "APPROVED", "critique": None}
-    try:
-        return json.loads(match.group(0))
-    except json.JSONDecodeError:
-        return {"decision": "APPROVED", "critique": None}
+log = logging.getLogger(__name__)
+MAX_RETRIES = 5
+_MAX_OBS_CHARS = 8000
 
 
 def make_verifier_node(model):
@@ -35,15 +27,26 @@ def make_verifier_node(model):
             lines.append("")
             lines.append("Observations:")
             for observation in state["observations"]:
-                lines.append(f"- [{observation['tool']}] {observation['result']}")
+                result = observation["result"]
+                if len(result) > _MAX_OBS_CHARS:
+                    result = result[:_MAX_OBS_CHARS] + "...[truncated]"
+                lines.append(f"- [{observation['tool']}] {result}")
 
+        log.info("[verifier] draft_answer=%r  retries=%d", state["draft_answer"], state["retries"])
         response = model.invoke(
             [
                 SystemMessage(content=VERIFIER_SYSTEM),
                 HumanMessage(content="\n".join(lines)),
             ]
         )
-        payload = _extract_json(response.content if isinstance(response.content, str) else str(response.content))
+        raw = extract_text(response.content)
+        log.debug("[verifier] raw response:\n%s", raw)
+        try:
+            payload = extract_json(raw)
+        except Exception:
+            log.warning("[verifier] failed to parse JSON, rejecting draft")
+            payload = {"decision": "REJECTED", "critique": "Verifier response was not valid JSON; re-plan."}
+        log.info("[verifier] decision=%s  critique=%s", payload.get("decision"), payload.get("critique"))
         if payload.get("decision") == "APPROVED":
             return {"final_answer": state["draft_answer"], "critique": None}
 

@@ -11,12 +11,20 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
 
 # Make `app.py` importable whether invoked from repo root or inside the Space.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+try:
+    from dotenv import load_dotenv  # noqa: E402
+
+    load_dotenv()
+except ImportError:
+    pass
 
 from gaia_agent.config import Config  # noqa: E402
 from gaia_agent.gaia_dataset import GaiaDatasetClient  # noqa: E402
@@ -25,17 +33,33 @@ from gaia_agent.runner import run_agent_on_questions  # noqa: E402
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--limit", type=int, default=3)
+    parser.add_argument("--limit", type=int, default=10, help="Number of questions to run. Set to -1 for all.")
     parser.add_argument("--level", type=str, default="1")
+    parser.add_argument("--verbose", action="store_true", help="Enable LangChain debug logging")
     parser.add_argument("--config", type=str, default="2023_all")
     parser.add_argument("--split", type=str, default="validation")
+    parser.add_argument("--local", action="store_true", help="Run with local model defined in .env")
+    parser.add_argument("--model", type=str, default="gemini-3-flash-preview", help="Model to run when not using --local (defaults to gemini provider)")
     parser.add_argument(
         "--task-id",
         type=str,
         default=None,
-        help="Run only this specific task_id (ignores --limit/--level)",
+        help="Run specific task_id(s) (comma-separated, ignores --limit/--level)",
     )
+    parser.add_argument("--rerun-failed", action="store_true", help="Automatically rerun tasks that failed in the last run (from .last_failures.txt)")
+    parser.add_argument("--force", action="store_true", help="Delete existing checkpoints for selected tasks before running")
     args = parser.parse_args()
+
+    log_level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    # suppress noisy third-party loggers unless verbose
+    if not args.verbose:
+        for noisy in ("httpx", "httpcore", "langchain_core", "openai", "urllib3"):
+            logging.getLogger(noisy).setLevel(logging.WARNING)
 
     token = os.getenv("HF_TOKEN") or os.getenv("GAIA_HUGGINGFACE_API_KEY")
 
@@ -44,21 +68,55 @@ def main() -> None:
 
     cfg = Config.from_env()
 
+    if not args.local:
+        import dataclasses
+        cfg = dataclasses.replace(
+            cfg,
+            cheap_provider="google",
+            cheap_model=args.model,
+            strong_provider="google",
+            strong_model=args.model
+        )
+    limit = args.limit if args.limit > 0 else None
+    
+    # Handle task_ids / rerun-failed
+    target_ids = []
+    if args.rerun_failed:
+        fail_file = Path(".last_failures.txt")
+        if fail_file.exists():
+            target_ids = fail_file.read_text().strip().split(",")
+            target_ids = [tid.strip() for tid in target_ids if tid.strip()]
+            print(f"Loaded {len(target_ids)} failed IDs from {fail_file}")
+        else:
+            print("No .last_failures.txt found. Skipping rerun.")
+
+    if args.task_id:
+        target_ids.extend([tid.strip() for tid in args.task_id.split(",") if tid.strip()])
+
     client = GaiaDatasetClient(
         config=args.config,
         split=args.split,
-        level=None if args.task_id else args.level,
-        limit=None if args.task_id else args.limit,
+        level=None if target_ids else args.level,
+        limit=None if target_ids else limit,
         token=token,
     )
 
     questions = client.get_questions()
-    if args.task_id:
-        questions = [q for q in questions if q["task_id"] == args.task_id]
+    if target_ids:
+        questions = [q for q in questions if q["task_id"] in target_ids]
 
     if not questions:
         print("No matching questions.")
         return
+
+    # Delete checkpoints if --force is requested
+    if args.force:
+        checkpoint_root = Path(cfg.checkpoint_dir)
+        for q in questions:
+            checkpoint_path = checkpoint_root / f"{q['task_id']}.json"
+            if checkpoint_path.exists():
+                print(f"Forcing rerun: deleting checkpoint {checkpoint_path}")
+                checkpoint_path.unlink()
 
     agent = GaiaAgent(cfg=cfg, client=client)
 
@@ -67,6 +125,7 @@ def main() -> None:
     answers_by_id = {a["task_id"]: a["submitted_answer"] for a in answers}
 
     correct = 0
+    failed_ids = []
     for q in questions:
         tid = q["task_id"]
         got = answers_by_id.get(tid, "")
@@ -74,6 +133,9 @@ def main() -> None:
         ok = str(got).strip().lower() == str(expected).strip().lower()
         if ok:
             correct += 1
+        else:
+            failed_ids.append(tid)
+
         print("-" * 70)
         print(f"task_id : {tid}")
         print(f"level   : {q.get('Level')}")
@@ -84,6 +146,18 @@ def main() -> None:
 
     print("=" * 70)
     print(f"Score: {correct}/{len(questions)}")
+    
+    if failed_ids:
+        ids_str = ",".join(failed_ids)
+        print(f"\nFailed Task IDs (for easy rerun):")
+        print(ids_str)
+        Path(".last_failures.txt").write_text(ids_str)
+        print(f"\nWritten to .last_failures.txt")
+    elif target_ids:
+        # All targets passed!
+        if Path(".last_failures.txt").exists():
+             Path(".last_failures.txt").unlink()
+             print("\nCleared .last_failures.txt as all requested tasks passed.")
 
 
 if __name__ == "__main__":

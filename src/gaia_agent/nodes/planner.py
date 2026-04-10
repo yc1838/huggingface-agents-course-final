@@ -1,21 +1,15 @@
 from __future__ import annotations
 
-import json
-import re
+import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
+from gaia_agent.json_utils import extract_json
+from gaia_agent.llm_utils import extract_text
 from gaia_agent.prompts import PLANNER_SYSTEM
 from gaia_agent.state import AgentState, PlanStep
 
-_JSON_BLOCK = re.compile(r"\{.*\}", re.DOTALL)
-
-
-def _extract_json(text: str) -> dict:
-    match = _JSON_BLOCK.search(text)
-    if match is None:
-        raise ValueError(f"No JSON object found in planner response: {text[:200]}")
-    return json.loads(match.group(0))
+log = logging.getLogger(__name__)
 
 
 def make_planner_node(model):
@@ -26,20 +20,26 @@ def make_planner_node(model):
         if state["critique"]:
             human_lines.append(f"Prior critique: {state['critique']}")
 
+        log.info("[planner] invoking model for task=%s", state["task_id"])
         response = model.invoke(
             [
                 SystemMessage(content=PLANNER_SYSTEM),
                 HumanMessage(content="\n".join(human_lines)),
             ]
         )
-        payload = _extract_json(response.content if isinstance(response.content, str) else str(response.content))
-        plan: list[PlanStep] = [
-            {
-                "description": step["description"],
-                "tier": step.get("tier", "S1"),
-            }
-            for step in payload.get("plan", [])
-        ]
+        raw = extract_text(response.content)
+        log.debug("[planner] raw response:\n%s", raw)
+        payload = extract_json(raw)
+        log.info("[planner] plan steps: %s", [s["description"] for s in payload.get("plan", [])])
+        plan = []
+        for step in payload.get("plan", []):
+            if isinstance(step, dict):
+                description = step.get("description", str(step))
+                tier = step.get("tier", "S1")
+            else:
+                description = str(step)
+                tier = "S1"
+            plan.append({"description": description, "tier": tier})
         return {
             "plan": plan,
             "step_idx": 0,

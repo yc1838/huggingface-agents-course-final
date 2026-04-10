@@ -12,6 +12,8 @@ from gaia_agent.models import get_cheap_model, get_strong_model
 from gaia_agent.nodes.perception import make_perception_node
 from gaia_agent.runner import run_agent_on_questions
 from gaia_agent.tools import build_tools
+from dotenv import load_dotenv
+load_dotenv()
 
 # --- Constants ---
 DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"

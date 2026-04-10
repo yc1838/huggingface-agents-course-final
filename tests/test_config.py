@@ -31,6 +31,7 @@ def test_config_from_env_uses_defaults(monkeypatch):
     assert config.huggingface_api_key == ""
     assert config.tavily_api_key == ""
     assert config.lmstudio_base_url == ""
+    assert config.max_tokens == 1024
 
 
 def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
@@ -46,6 +47,7 @@ def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
     monkeypatch.setenv("GAIA_TAVILY_API_KEY", "tv-key")
     monkeypatch.setenv("GAIA_WHISPER_MODEL", "small")
     monkeypatch.setenv("GAIA_LMSTUDIO_BASE_URL", "http://host:1234/v1")
+    monkeypatch.setenv("GAIA_MAX_TOKENS", "2048")
 
     config = Config.from_env()
 
@@ -62,4 +64,5 @@ def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
         huggingface_api_key="hf-key",
         tavily_api_key="tv-key",
         lmstudio_base_url="http://host:1234/v1",
+        max_tokens=2048,
     )

@@ -18,6 +18,7 @@ class Config:
     huggingface_api_key: str
     tavily_api_key: str
     lmstudio_base_url: str
+    max_tokens: int
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -36,4 +37,5 @@ class Config:
             huggingface_api_key=os.getenv("GAIA_HUGGINGFACE_API_KEY", ""),
             tavily_api_key=os.getenv("GAIA_TAVILY_API_KEY", ""),
             lmstudio_base_url=os.getenv("GAIA_LMSTUDIO_BASE_URL", ""),
+            max_tokens=int(os.getenv("GAIA_MAX_TOKENS", "1024")),
         )

@@ -20,8 +20,11 @@ def extract_video_id(url: str) -> str:
 
 
 def youtube_transcript(url: str) -> str:
-    vid = extract_video_id(url)
-    fetched = YouTubeTranscriptApi().fetch(vid)
-    return " ".join(
-        (seg["text"] if isinstance(seg, dict) else seg.text) for seg in fetched
-    )
+    try:
+        vid = extract_video_id(url)
+        fetched = YouTubeTranscriptApi().fetch(vid)
+        return " ".join(
+            (seg["text"] if isinstance(seg, dict) else seg.text) for seg in fetched
+        )
+    except Exception as e:
+        return f"Video Transcript Error: {e}"

@@ -4,6 +4,7 @@ from langgraph.graph import END, StateGraph
 
 from gaia_agent.nodes.executor import make_executor_node
 from gaia_agent.nodes.formatter import formatter
+from gaia_agent.nodes.orchestrator import make_orchestrator_node
 from gaia_agent.nodes.planner import make_planner_node
 from gaia_agent.nodes.router import route_next
 from gaia_agent.nodes.verifier import make_verifier_node, verifier_decision
@@ -22,6 +23,7 @@ def build_graph(
 
     graph.add_node("perception", perception_node)
     graph.add_node("planner", make_planner_node(planner_model))
+    graph.add_node("orchestrator", make_orchestrator_node(executor_model_s1))
     graph.add_node("exec_s1", make_executor_node(executor_model_s1, tools))
     graph.add_node("exec_s2", make_executor_node(executor_model_s2, tools))
     graph.add_node("verifier", make_verifier_node(verifier_model))
@@ -29,21 +31,17 @@ def build_graph(
 
     graph.set_entry_point("perception")
     graph.add_edge("perception", "planner")
+    graph.add_edge("planner", "orchestrator")
+    
     graph.add_conditional_edges(
-        "planner",
+        "orchestrator",
         route_next,
         {"exec_s1": "exec_s1", "exec_s2": "exec_s2", "verifier": "verifier"},
     )
-    graph.add_conditional_edges(
-        "exec_s1",
-        route_next,
-        {"exec_s1": "exec_s1", "exec_s2": "exec_s2", "verifier": "verifier"},
-    )
-    graph.add_conditional_edges(
-        "exec_s2",
-        route_next,
-        {"exec_s1": "exec_s1", "exec_s2": "exec_s2", "verifier": "verifier"},
-    )
+    
+    graph.add_edge("exec_s1", "orchestrator")
+    graph.add_edge("exec_s2", "orchestrator")
+    
     graph.add_conditional_edges(
         "verifier",
         verifier_decision,

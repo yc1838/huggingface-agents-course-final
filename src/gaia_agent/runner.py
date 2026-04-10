@@ -31,7 +31,7 @@ def run_agent_on_questions(graph: Any, questions: list[dict], checkpoint_dir: st
 
         state = new_state(task_id=task_id, question=prompt)
         try:
-            result = graph.invoke(state)
+            result = graph.invoke(state, {"recursion_limit": 25})
         except Exception as exc:  # pragma: no cover - exercised in tests
             answers.append(
                 {
@@ -44,7 +44,9 @@ def run_agent_on_questions(graph: Any, questions: list[dict], checkpoint_dir: st
         checkpoint = {**state, **result}
         submitted_answer = checkpoint.get("final_answer") or ""
         checkpoint["submitted_answer"] = submitted_answer
-        checkpoint_path.write_text(json.dumps(checkpoint, indent=2, sort_keys=True))
+        # Only cache if we got a real, non-empty answer
+        if submitted_answer and not submitted_answer.startswith("AGENT ERROR"):
+            checkpoint_path.write_text(json.dumps(checkpoint, indent=2, sort_keys=True))
         answers.append({"task_id": task_id, "submitted_answer": submitted_answer})
 
     return answers

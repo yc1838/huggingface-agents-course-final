@@ -10,6 +10,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+import requests
 from datasets import load_dataset
 
 
@@ -22,6 +23,10 @@ class GaiaDatasetClient:
         limit: int | None = None,
         token: str | None = None,
     ) -> None:
+        self.config = config
+        self.split = split
+        self.token = token
+        
         ds = load_dataset("gaia-benchmark/GAIA", config, split=split, token=token)
         self._rows: list[dict[str, Any]] = []
         for row in ds:
@@ -49,16 +54,48 @@ class GaiaDatasetClient:
         row = next((r for r in self._rows if r["task_id"] == task_id), None)
         if row is None:
             return None
-        file_path = row.get("file_path")
+        
         file_name = row.get("file_name")
-        if not file_path or not file_name:
+        if not file_name:
             return None
-        src = Path(file_path)
-        if not src.exists():
-            return None
+
         dest_root = Path(dest_dir)
         dest_root.mkdir(parents=True, exist_ok=True)
         dest = dest_root / file_name
-        if not dest.exists():
-            shutil.copy(src, dest)
-        return dest
+
+        # If already here, we are good
+        if dest.exists() and dest.stat().st_size > 300:
+             return dest
+
+        # 1. Try local 'data/' directory fallback (some files might be there)
+        level = row.get("Level", "1")
+        local_data_path = Path("data") / f"gaia_level{level}" / "files" / task_id
+        if local_data_path.exists() and local_data_path.stat().st_size > 300:
+             shutil.copy(local_data_path, dest)
+             return dest
+
+        # 2. Try direct download from Hugging Face resolve API
+        # GAIA file structure on HF: main/{year}/{split}/{task_id}.{ext}
+        # Note: year is derived from config (e.g., '2023_all')
+        year = "2023" # default
+        if hasattr(self, "config") and "_" in self.config:
+            year = self.config.split("_")[0]
+        
+        split = getattr(self, "split", "validation")
+        ext = Path(file_name).suffix
+        hf_url = f"https://huggingface.co/datasets/gaia-benchmark/GAIA/resolve/main/{year}/{split}/{task_id}{ext}"
+        
+        try:
+            headers = {}
+            if getattr(self, "token", None):
+                headers["Authorization"] = f"Bearer {self.token}"
+            
+            response = requests.get(hf_url, headers=headers, timeout=20, stream=True)
+            if response.status_code == 200:
+                with open(dest, "wb") as f:
+                    shutil.copyfileobj(response.raw, f)
+                return dest
+        except Exception:
+            pass
+            
+        return None

@@ -29,6 +29,8 @@ class AgentState(TypedDict):
     observations: list[Observation]
     draft_answer: str | None
     critique: str | None
+    current_domain: str | None
+    current_strategy: str | None
     retries: int
     final_answer: str | None
 
@@ -44,6 +46,8 @@ def new_state(task_id: str, question: str) -> AgentState:
         observations=[],
         draft_answer=None,
         critique=None,
+        current_domain=None,
+        current_strategy=None,
         retries=0,
         final_answer=None,
     )

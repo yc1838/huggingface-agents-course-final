@@ -16,6 +16,7 @@ def _cfg() -> Config:
         huggingface_api_key="",
         tavily_api_key="",
         lmstudio_base_url="",
+        max_tokens=1024,
     )
 
 
