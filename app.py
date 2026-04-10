@@ -1,5 +1,9 @@
 import os
+import sys
 from pathlib import Path
+
+# Add src to sys.path so gaia_agent can be imported even if not installed as a package
+sys.path.append(str(Path(__file__).parent / "src"))
 
 import gradio as gr
 import pandas as pd
