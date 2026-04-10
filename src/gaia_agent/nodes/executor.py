@@ -44,6 +44,8 @@ def _format_context(state: AgentState) -> str:
     for index, step in enumerate(state["plan"]):
         marker = ">>" if index == state["step_idx"] else "  "
         lines.append(f"{marker} {index}. [{step['tier']}] {step['description']}")
+        if step.get("thought"):
+            lines.append(f"   (Logic/Rationale: {step['thought']})")
     if state["observations"]:
         lines.append("")
         lines.append("Prior observations:")
