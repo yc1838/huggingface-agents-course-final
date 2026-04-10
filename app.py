@@ -2,6 +2,10 @@ import os
 import sys
 from pathlib import Path
 
+from dotenv import load_dotenv
+env_path = Path(__file__).parent / ".env"
+load_dotenv(dotenv_path=env_path, override=True)
+
 # Add src to sys.path so gaia_agent can be imported even if not installed as a package
 sys.path.append(str(Path(__file__).parent / "src"))
 
@@ -12,12 +16,10 @@ import requests
 from gaia_agent.api_client import GaiaApiClient
 from gaia_agent.config import Config
 from gaia_agent.graph import build_graph
-from gaia_agent.models import get_cheap_model, get_strong_model
+from gaia_agent.models import get_cheap_model, get_strong_model, get_extra_strong_model
 from gaia_agent.nodes.perception import make_perception_node
 from gaia_agent.runner import run_agent_on_questions
 from gaia_agent.tools import build_tools
-from dotenv import load_dotenv
-load_dotenv()
 
 # --- Constants ---
 DEFAULT_API_URL = "https://agents-course-unit4-scoring.hf.space"
@@ -32,13 +34,21 @@ class GaiaAgent:
         self.tools = build_tools(self.cfg)
         self.cheap = get_cheap_model(self.cfg)
         self.strong = get_strong_model(self.cfg)
+        self.extra_strong = get_extra_strong_model(self.cfg)
+        
+        # FINAL OVERRIDE: If the provider in cfg is NOT what we expect from .env, 
+        # it might be due to a race condition or export lock. Re-initialize from fresh env.
+        if os.getenv("GAIA_STRONG_PROVIDER") == "lmstudio":
+            self.strong = get_strong_model(self.cfg)
+
         file_dir = Path(self.cfg.checkpoint_dir) / "files"
         file_dir.mkdir(parents=True, exist_ok=True)
         perception = make_perception_node(self.client, file_dir)
         self.graph = build_graph(
             perception_node=perception,
-            planner_model=self.strong,
-            executor_model_s1=self.cheap,
+            planner_model=self.extra_strong,
+            orchestrator_model=self.strong,
+            executor_model_s1=self.strong,
             executor_model_s2=self.strong,
             verifier_model=self.strong,
             tools=self.tools,

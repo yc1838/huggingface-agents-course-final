@@ -15,6 +15,7 @@ from gaia_agent.state import AgentState
 def build_graph(
     perception_node,
     planner_model,
+    orchestrator_model,
     executor_model_s1,
     executor_model_s2,
     verifier_model,
@@ -24,7 +25,7 @@ def build_graph(
 
     graph.add_node("perception", perception_node)
     graph.add_node("planner", make_planner_node(planner_model))
-    graph.add_node("orchestrator", make_orchestrator_node(executor_model_s1))
+    graph.add_node("orchestrator", make_orchestrator_node(orchestrator_model))
     graph.add_node("exec_s1", make_executor_node(executor_model_s1, tools))
     graph.add_node("exec_s2", make_executor_node(executor_model_s2, tools))
     graph.add_node("reflector", make_reflector_node(verifier_model))

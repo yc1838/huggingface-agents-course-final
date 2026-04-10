@@ -10,6 +10,8 @@ class Config:
     cheap_model: str
     strong_provider: str
     strong_model: str
+    extra_strong_provider: str
+    extra_strong_model: str
     api_url: str
     checkpoint_dir: str
     whisper_model: str
@@ -27,6 +29,8 @@ class Config:
             cheap_model=os.getenv("GAIA_CHEAP_MODEL", "gemma3:4b"),
             strong_provider=os.getenv("GAIA_STRONG_PROVIDER", "anthropic"),
             strong_model=os.getenv("GAIA_STRONG_MODEL", "claude-sonnet-4-6"),
+            extra_strong_provider=os.getenv("GAIA_EXTRA_STRONG_PROVIDER", os.getenv("GAIA_STRONG_PROVIDER", "anthropic")),
+            extra_strong_model=os.getenv("GAIA_EXTRA_STRONG_MODEL", os.getenv("GAIA_STRONG_MODEL", "claude-sonnet-4-6")),
             api_url=os.getenv(
                 "GAIA_API_URL", "https://agents-course-unit4-scoring.hf.space"
             ),

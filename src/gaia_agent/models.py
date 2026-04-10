@@ -10,7 +10,10 @@ from langchain_huggingface import ChatHuggingFace, HuggingFaceEndpoint
 from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
+import logging
 from gaia_agent.config import Config
+
+log = logging.getLogger(__name__)
 
 LMSTUDIO_DEFAULT_BASE_URL = "http://localhost:1234/v1"
 _NO_THINK = "/no_think"
@@ -25,12 +28,16 @@ class _NoThinkWrapper(BaseChatModel):
     """
 
     inner: ChatOpenAI
+    model_name: str
 
     @property
     def _llm_type(self) -> str:
         return "lmstudio-no-think"
 
     def _inject(self, messages: Sequence[BaseMessage]) -> list[BaseMessage]:
+        if "qwen" not in self.model_name.lower():
+            return list(messages)
+            
         out = []
         for msg in messages:
             if isinstance(msg, HumanMessage) and not str(msg.content).endswith(_NO_THINK):
@@ -68,13 +75,28 @@ class _BoundNoThinkWrapper:
 
 
 def _build(provider: str, model: str, cfg: Config) -> BaseChatModel:
+    log.info("Building model for provider=%r, model=%r", provider, model)
     max_tokens = cfg.max_tokens
     if provider == "ollama":
         return ChatOllama(model=model, num_predict=max_tokens)
     if provider == "anthropic":
         return ChatAnthropic(model=model, api_key=cfg.anthropic_api_key, max_tokens=max_tokens)
     if provider == "google":
-        return ChatGoogleGenerativeAI(model=model, google_api_key=cfg.google_api_key, max_output_tokens=max_tokens)
+        from langchain_google_genai import HarmBlockThreshold, HarmCategory
+        
+        # Suppress all safety filters to avoid silent empty responses on academic tasks
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+        }
+        return ChatGoogleGenerativeAI(
+            model=model, 
+            google_api_key=cfg.google_api_key, 
+            max_output_tokens=max_tokens,
+            safety_settings=safety_settings
+        )
     if provider == "huggingface":
         endpoint = HuggingFaceEndpoint(
             repo_id=model, huggingfacehub_api_token=cfg.huggingface_api_key, max_new_tokens=max_tokens
@@ -90,7 +112,7 @@ def _build(provider: str, model: str, cfg: Config) -> BaseChatModel:
             max_tokens=max_tokens,
         )
         # Wrap with /no_think injection to disable Qwen3 chain-of-thought mode
-        return _NoThinkWrapper(inner=inner)
+        return _NoThinkWrapper(inner=inner, model_name=model)
     raise ValueError(f"Unknown provider: {provider}")
 
 
@@ -100,3 +122,7 @@ def get_cheap_model(cfg: Config) -> BaseChatModel:
 
 def get_strong_model(cfg: Config) -> BaseChatModel:
     return _build(cfg.strong_provider, cfg.strong_model, cfg)
+
+
+def get_extra_strong_model(cfg: Config) -> BaseChatModel:
+    return _build(cfg.extra_strong_provider, cfg.extra_strong_model, cfg)

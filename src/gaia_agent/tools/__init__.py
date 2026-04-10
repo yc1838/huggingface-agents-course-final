@@ -12,6 +12,7 @@ from gaia_agent.tools.search import tavily_search as _tavily_search
 from gaia_agent.tools.vision import inspect_visual_content as _inspect_visual_content
 from gaia_agent.tools.web import fetch_url as _fetch_url
 from gaia_agent.tools.youtube import youtube_transcript as _youtube_transcript
+from gaia_agent.tools.academic import arxiv_search as _arxiv_search
 
 
 def build_tools(cfg: Config) -> list[BaseTool]:
@@ -60,6 +61,11 @@ def build_tools(cfg: Config) -> list[BaseTool]:
         """Fetch the transcript for a YouTube video URL."""
         return _youtube_transcript(url)
 
+    @tool
+    def arxiv_search(query: str, max_results: int = 5) -> str:
+        """Search arXiv for papers. Returns a list of titles, authors, and summaries. Use this for modern academic pre-prints."""
+        return _arxiv_search(query, max_results=max_results)
+
     return [
         tavily_search,
         fetch_url,
@@ -69,4 +75,5 @@ def build_tools(cfg: Config) -> list[BaseTool]:
         youtube_transcript,
         inspect_pdf,
         inspect_visual_content,
+        arxiv_search,
     ]

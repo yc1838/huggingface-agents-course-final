@@ -38,39 +38,30 @@ def _repair(text: str) -> str:
 
 
 def extract_json(text: str) -> dict:
-    """Extract and parse JSON from an LLM response string.
-
-    Tries in order:
-    1. ``parse_json_markdown`` from LangChain (handles fenced blocks)
-    2. Repair common mistakes (single quotes, trailing commas, Python
-       literals) then ``json.loads``
-    3. Regex-extract the first ``{ ... }`` block and retry
-    """
+    """Extract and parse JSON from an LLM response string."""
     # 1. Try LangChain's parser first (handles ```json ... ``` well)
     try:
         from langchain_core.utils.json import parse_json_markdown
-
-        return parse_json_markdown(text)
+        res = parse_json_markdown(text)
+        if res:
+            return res
     except Exception:
         pass
 
-    # 2. Try repairing the raw text
-    try:
-        return json.loads(_repair(text))
-    except json.JSONDecodeError:
-        pass
-
-    # 3. Strip markdown fences, then try repair
-    fence_match = _FENCE_RE.search(text)
-    if fence_match:
+    # 2. Aggressive search for the first { and last }
+    start_idx = text.find("{")
+    end_idx = text.rfind("}")
+    
+    if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+        json_candidate = text[start_idx : end_idx + 1]
         try:
-            return json.loads(_repair(fence_match.group(1)))
-        except json.JSONDecodeError:
-            pass
+            return json.loads(_repair(json_candidate))
+        except Exception:
+            # Try once more without repair if repair failed
+            try:
+                return json.loads(json_candidate)
+            except Exception:
+                pass
 
-    # 4. Extract first { ... } block and try repair
-    brace_match = _BRACE_RE.search(text)
-    if brace_match:
-        return json.loads(_repair(brace_match.group(0)))
-
-    raise ValueError(f"No valid JSON found in LLM response: {text[:300]}")
+    sample = text[:500] + "..." if len(text) > 500 else text
+    raise ValueError(f"No valid JSON found in LLM response. Raw snippet:\n{sample}")

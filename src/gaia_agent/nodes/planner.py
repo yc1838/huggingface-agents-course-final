@@ -20,15 +20,23 @@ def make_planner_node(model):
         if state["critique"]:
             human_lines.append(f"Prior critique: {state['critique']}")
 
-        log.info("[planner] invoking model for task=%s", state["task_id"])
+        log.info("[planner] invoking model (type=%s) for task=%s", type(model).__name__, state["task_id"])
         response = model.invoke(
             [
                 SystemMessage(content=PLANNER_SYSTEM),
                 HumanMessage(content="\n".join(human_lines)),
             ]
         )
+        # EXTREME LOGGING: Capture everything about the response
+        try:
+            log.info("[planner] response metadata: %r", getattr(response, "response_metadata", {}))
+            log.info("[planner] usage metadata: %r", getattr(response, "usage_metadata", {}))
+            log.info("[planner] additional_kwargs: %r", getattr(response, "additional_kwargs", {}))
+        except Exception as e:
+            log.warning("[planner] failed to log metadata: %s", e)
+
         raw = extract_text(response.content)
-        log.debug("[planner] raw response:\n%s", raw)
+        log.info("[planner] raw response (len=%d):\n%r", len(raw), raw)
         payload = extract_json(raw)
         if not isinstance(payload, dict):
             log.warning("[planner] payload is not a dict: %r", payload)
@@ -41,14 +49,30 @@ def make_planner_node(model):
         log.info("[planner] plan steps: %s", [s.get("description", str(s)) if isinstance(s, dict) else str(s) for s in plan_raw])
         plan = []
         for step in plan_raw:
+            thought = "No rationale provided."
+            description = str(step)
+            tier = "S1"
+
             if isinstance(step, dict):
-                thought = step.get("thought", "No rationale provided.")
-                description = step.get("description", str(step))
-                tier = step.get("tier", "S1")
-            else:
-                thought = "No rationale provided."
-                description = str(step)
-                tier = "S1"
+                thought = step.get("thought", thought)
+                description = step.get("description", description)
+                tier = step.get("tier", tier)
+            elif isinstance(step, str):
+                # Aggressively try to find JSON if it's a string
+                trimmed = step.strip()
+                start_idx = trimmed.find("{")
+                end_idx = trimmed.rfind("}")
+                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
+                    json_candidate = trimmed[start_idx : end_idx + 1]
+                    try:
+                        nested = extract_json(json_candidate)
+                        if isinstance(nested, dict):
+                            thought = nested.get("thought", thought)
+                            description = nested.get("description", description)
+                            tier = nested.get("tier", tier)
+                    except Exception:
+                        pass
+
             plan.append({"thought": thought, "description": description, "tier": tier})
 
         return {

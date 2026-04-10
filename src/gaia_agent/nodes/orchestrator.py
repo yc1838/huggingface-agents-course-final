@@ -34,7 +34,11 @@ _EVALUATE_SYSTEM = (
     "- vision: analyzing images or videos\n"
     "- audio: listening to audio files, transcribing speech\n"
     "- file: reading local documents (txt, Excel, CSV, etc.)\n"
-    "- general: simple reasoning or state management"
+    "- general: simple reasoning or state management\n\n"
+    "CRITICAL ANTI-ROLEPLAY RULE: You are ONLY a router/evaluator. "
+    "YOU MUST NOT write Python code. YOU MUST NOT simulate tool calls. "
+    "DO NOT output any conversational text like 'I will search for...' or 'Let me fetch...'. "
+    "Output ABSOLUTELY NOTHING except the pure JSON object. No markdown, no backticks, no explanation."
 )
 
 
@@ -86,6 +90,7 @@ def make_orchestrator_node(model):
         )
 
         raw = extract_text(response.content)
+        log.info("[orchestrator] raw response (len=%d): %r", len(raw), raw[:500] if raw else '')
         try:
             payload = extract_json(raw)
         except Exception:

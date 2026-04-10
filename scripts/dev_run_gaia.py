@@ -21,8 +21,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 try:
     from dotenv import load_dotenv  # noqa: E402
-
-    load_dotenv()
+    
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    load_dotenv(dotenv_path=env_path, override=True)
+    
 except ImportError:
     pass
 
@@ -68,7 +70,8 @@ def main() -> None:
 
     cfg = Config.from_env()
 
-    if not args.local:
+    # Default to local-env behavior. The --model flag will only be used if GAIA_STRONG_MODEL is not set.
+    if args.model != "gemini-3-flash-preview" or not cfg.strong_model:
         import dataclasses
         cfg = dataclasses.replace(
             cfg,
@@ -77,6 +80,10 @@ def main() -> None:
             strong_provider="google",
             strong_model=args.model
         )
+
+    # Manual override for the user to be absolutely sure
+    if args.local:
+        cfg = Config.from_env()
     limit = args.limit if args.limit > 0 else None
     
     # Handle task_ids / rerun-failed
