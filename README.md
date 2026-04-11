@@ -21,6 +21,7 @@ An AI agent that tackles the [GAIA benchmark](https://huggingface.co/datasets/ga
 ## Remove checkpoint
 `rm -rf .checkpoints/*`
 test run: `python scripts/dev_run_gaia.py --limit 1 --level 1`
+full run: `python scripts/dev_run_gaia.py --limit 6 --level 2  --cavemen --caveman-mode ultra 2>&1 | tee gaia_v28.log`
 
 ## Architecture
 

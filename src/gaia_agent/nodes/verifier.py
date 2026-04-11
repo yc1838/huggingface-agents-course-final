@@ -9,7 +9,7 @@ from gaia_agent.llm_utils import extract_text
 from gaia_agent.prompts import VERIFIER_SYSTEM, apply_caveman
 
 log = logging.getLogger(__name__)
-MAX_RETRIES = 5
+MAX_RETRIES = 10
 _MAX_OBS_CHARS = 8000
 
 

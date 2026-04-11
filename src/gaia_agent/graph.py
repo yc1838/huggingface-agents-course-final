@@ -4,7 +4,7 @@ from langgraph.graph import END, StateGraph
 
 from gaia_agent.nodes.executor import make_executor_node
 from gaia_agent.nodes.formatter import make_formatter_node
-from gaia_agent.nodes.orchestrator import make_orchestrator_node
+from gaia_agent.nodes.state_manager import make_state_manager_node
 from gaia_agent.nodes.planner import make_planner_node
 from gaia_agent.nodes.reflector import make_reflector_node
 from gaia_agent.nodes.router import route_next
@@ -29,8 +29,8 @@ def build_graph(
     graph.add_node("planner", make_planner_node(planner_model, caveman=caveman, caveman_mode=caveman_mode))
     
     # MISSION 2: Specialized Multi-Agent Nodes
-    # The Router/Orchestrator uses the CHEAP model for dispatching
-    graph.add_node("orchestrator", make_orchestrator_node(cheap_model, caveman=caveman, caveman_mode=caveman_mode))
+    # The State Manager uses the CHEAP model for dispatching and orchestrating todos
+    graph.add_node("state_manager", make_state_manager_node(cheap_model, caveman=caveman, caveman_mode=caveman_mode))
     
     # Use CHEAP model for structured execution (Math)
     graph.add_node("exec_math", make_executor_node(cheap_model, tools, caveman=caveman, caveman_mode=caveman_mode))
@@ -48,10 +48,10 @@ def build_graph(
 
     graph.set_entry_point("perception")
     graph.add_edge("perception", "planner")
-    graph.add_edge("planner", "orchestrator")
+    graph.add_edge("planner", "state_manager")
     
     graph.add_conditional_edges(
-        "orchestrator",
+        "state_manager",
         route_next,
         {
             "exec_math": "exec_math",
@@ -68,7 +68,7 @@ def build_graph(
     for node in ["exec_math", "exec_research", "exec_vision", "exec_audio", "exec_file", "exec_general"]:
         graph.add_edge(node, "reflector")
         
-    graph.add_edge("reflector", "orchestrator")
+    graph.add_edge("reflector", "state_manager")
     
     graph.add_conditional_edges(
         "verifier",

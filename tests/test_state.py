@@ -12,9 +12,14 @@ def test_new_state_returns_expected_defaults():
         plan=[],
         step_idx=0,
         observations=[],
+        working_memory="",
         draft_answer=None,
         critique=None,
+        current_domain=None,
+        current_strategy=None,
         retries=0,
+        task_chronicle="",
+        todo_list=[],
         final_answer=None,
     )
 

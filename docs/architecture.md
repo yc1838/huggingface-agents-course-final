@@ -1,50 +1,60 @@
 # GAIA Agent Enhanced Architecture
 
-This diagram illustrates the current refined architecture of our GAIA agent, incorporating the **Planner Recovery Mode** and the **Task Chronicle** system.
+This diagram illustrates the current refined architecture of our GAIA agent, incorporating the **State Manager**, **Dynamic Todo List**, and the **Context Offloading** system.
 
 ```mermaid
 graph TD
     %% Entry Point
-    Start((Start)) --> Planner[Planner Node]
+    Start((Start)) --> Planner[Planner Node\n'Strategic Hub']
 
     %% Main Reasoning Loop
     subgraph "Reasoning & Execution Loop"
-        Planner --> Orchestrator{Orchestrator}
-        Orchestrator -- "Needs Tool Step" --> Executor[Executor Node]
-        Executor -- "Tool Results" --> Reflector[Reflector Node]
-        Reflector -- "Memory Upgrade & Chronicle Update" --> Orchestrator
+        Planner --> StateManager{State Manager\n'The Brain'}
+        
+        %% Multi-Expert Routing
+        StateManager -- "MATH (Cheap Model)" --> ExecMath[Executor: Math]
+        StateManager -- "RESEARCH (Strong Model)" --> ExecResearch[Executor: Research]
+        StateManager -- "VISION/AUDIO (Strong Model)" --> ExecVision[Executor: Perception]
+        
+        ExecMath --> Reflector[Reflector Node]
+        ExecResearch --> Reflector
+        ExecVision --> Reflector
+        
+        Reflector -- "Memory Upgrade & Chronicle Update" --> StateManager
     end
 
     %% State & Memory Management
     subgraph "State Management (AgentState)"
         Chronicle[(Task Chronicle\nPersistent Facts)]
+        TodoList{{Dynamic Todo List\nExecution Progress}}
         WorkingMemory[Working Memory\nRaw Context]
+        Filesystem[(Agent Sandbox\nContext Offloading)]
     end
 
     %% Verification & Recovery
-    Orchestrator -- "Draft Answer Ready" --> Verifier{Verifier Node}
+    StateManager -- "Draft Answer Ready" --> Verifier{Verifier Node}
     Verifier -- "APPROVED" --> End((Success))
-    Verifier -- "REJECTED (Critique)" --> Recovery{Recovery Mode?}
+    Verifier -- "REJECTED (Critique)" --> Planner
     
-    Recovery -- "Patch Existing Plan" --> Planner
-    Recovery -- "Full Restart" --> Planner
-
     %% Data Flow Connections
     Reflector -.-> Chronicle
-    Chronicle -.-> Planner
-    Chronicle -.-> Orchestrator
+    StateManager -.-> TodoList
+    ExecResearch -.-> Filesystem
+    Filesystem -.-> StateManager
     
-    %% Cache Layer
-    LLMCache{{LLM Cache\nSQLite DB}} -.-> Planner
-    LLMCache -.-> Orchestrator
-    LLMCache -.-> Reflector
-    LLMCache -.-> Verifier
+    %% Tool Layer
+    DDGS{{DDGS / Web Search}} -.-> ExecResearch
+    Pypdf{{pypdf / OCR}} -.-> ExecResearch
 ```
 
 ### Key Components:
 
-1.  **Task Chronicle**: A central, persistent memory that stores only definitive facts (e.g., "USDA 1959 document found"). It survives even when a plan is rejected.
-2.  **Planner Recovery Mode**: When the Verifier gives a critique (e.g., "wrong format"), the Planner uses the Chronicle and the critique to generate a "patch" step instead of restarting the whole research process.
-3.  **Orchestrator**: Acts as the executive brain, checking the Chronicle first to see if a final answer can be synthesized early.
-4.  **Reflector**: Crucial for state maintenance; it extracts `CHRONICLE UPDATE` lines from tool results to keep the mission on track.
-5.  **LLM Cache**: Speeds up the entire loop by skipping identical LLM triggers for repeated runs or debugging.
+1.  **State Manager (The Brain)**: Replaced the static Orchestrator. It monitors the **Todo List** and **Chronicle** using a **CHEAP model** (e.g., Gemini Flash) to decide the next strategic move.
+2.  **Model Intelligence Tiering**: 
+    - **Cheap Tier**: Used for orchestration (State Manager) and formatted data extraction (Math).
+    - **Strong Tier**: Used for complex reasoning, long-document research, and multimodal analysis.
+3.  **Dynamic Todo List**: A self-managed list where the agent writes its own sub-tasks. It allows the agent to track multi-stage progress more reliably than a fixed plan.
+4.  **Context Offloading (Filesystem Toolkit)**: To prevent context window overflow, the agent uses atomic tools (`ls`, `grep`, `write_file`) to store intermediate data in the sandbox instead of keeping it all in Working Memory.
+5.  **Task Chronicle**: A central, persistent memory that stores only definitive facts. It survives even if a specific plan step fails.
+6.  **Reflector**: Crucial for state maintenance; it integrates tool results into Working Memory and identifies `CHRONICLE UPDATE` lines to keep the mission on track.
+7.  **Modernized Search (DDGS)**: Uses the `ddgs` (DuckDuckGo) library for zero-cost, high-resiliency web research.

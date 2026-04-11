@@ -75,9 +75,33 @@ This document records our journey of stabilizing the GAIA agent, detailing the t
 
 ---
 
-## 🏆 Final Milestone: MISSION SUCCESS
-**Current Score: 2/5 (Baseline) -> Predicted 5/5**
-The agent is now equipped with defensive code, multimodal tool support for PDFs, and strict instructions for math and counting.
+## 🔍 Phase 11: Modernizing the Search Engine (Tavily to DDGS)
+**Issue**: Tavily often hit API limits or missed niche web content during intensive Level 2/3 tasks. Additionally, the `duckduckgo_search` package was renamed to `ddgs`, causing runtime warnings and a "lines undefined" bug in our tool.
+**Heart/Mind Journey**: Realized that "zero-cost" tools are more robust for massive research tasks. We don't need fancy API keys for basic snippets.
+**Fix**: Replaced Tavily with a modernized `ddgs` implementation. Fixed the legacy package `NameError` and cleaned up the result formatting.
+**Outcome**: Unlimited, free search capacity and a more resilient research tool.
 
 ---
-*Updated on 2026-04-10. This log serves as a testament to the fact that Agent engineering is 10% model and 90% robust infrastructure.*
+
+## 🧠 Phase 12: The "Multi-Expert" Brain & Cost Optimization
+**Issue**: Running every step (like simple math or todo management) on Claude Opus was slow and unnecessarily expensive.
+**Heart/Mind Journey**: Architecture should follow "Model Intelligence Tiering". A brain shouldn't use its maximum power to solve 1+1.
+**Fix**: Re-engineered the LangGraph to route tasks to specific model tiers (**Cheap** for math/state vs. **Strong** for research/vision).
+**Outcome**: Maintained high accuracy while drastically reducing latency and token costs.
+
+---
+
+## 🧱 Phase 13: The Recursion Wall & "Ultra" Caveman Mode
+**Issue**: Level 3 tasks with deep, multi-stage research trees hit the LangGraph recursion limit (50 steps).
+**Heart/Mind Journey**: Sometimes "smarter" is also "wordier". High verbosity leads to reasoning loops that eat up steps.
+**Fix**: Introduced **Caveman Ultra**—stripping all non-essential thought processes to force-compact the reasoning loop and maximize the survival of the 50-step window.
+**Outcome**: The agent is now a leaner, faster research machine, though the "deep-source" Level 3 tasks remain the final boss.
+
+---
+
+## 🏆 Final Milestone: MISSION SUCCESS
+**Current Score: 2/5 (Baseline) -> 7/10 (Benchmark)**
+The agent is now a cost-efficient, multi-expert system equipped with zero-cost tools and multimodal PDF support.
+
+---
+*Updated on 2026-04-11. This log serves as a testament to the fact that Agent engineering is 10% model and 90% robust infrastructure.*

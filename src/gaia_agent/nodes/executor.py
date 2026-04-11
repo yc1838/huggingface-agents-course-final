@@ -57,6 +57,12 @@ def _format_context(state: AgentState) -> str:
             lines.append(
                 f"- step {observation['step_idx']} [{observation['tool']}]: {result}"
             )
+    if state["todo_list"]:
+        lines.append("")
+        lines.append("DYNAMIC TODO LIST:")
+        for idx, todo in enumerate(state["todo_list"]):
+            lines.append(f"{idx}. {todo}")
+
     return "\n".join(lines)
 
 
@@ -96,12 +102,35 @@ def make_executor_node(model, tools, caveman: bool = False, caveman_mode: str = 
                 result = tools_by_name[name].invoke(args)
                 result_str = str(result)
                 log.info("[executor] tool result (%d chars): %s", len(result_str), result_str)
+                
+                # Special handling for Todo tools
+                todo_list = list(state.get("todo_list", []))
+                if result_str.startswith("SET_TODOS:"):
+                    import ast
+                    try:
+                        new_todos = ast.literal_eval(result_str[len("SET_TODOS:"):].strip())
+                        if isinstance(new_todos, list):
+                            todo_list = new_todos
+                            log.info("[executor] updated todo_list: %s", todo_list)
+                    except Exception as e:
+                        log.error("[executor] failed to parse todos: %s", e)
+                elif result_str.startswith("DONE_TODO:"):
+                    try:
+                        idx = int(result_str[len("DONE_TODO:"):].strip())
+                        if 0 <= idx < len(todo_list):
+                            # Mark as done by adding a prefix or similar
+                            if not todo_list[idx].startswith("[DONE]"):
+                                todo_list[idx] = f"[DONE] {todo_list[idx]}"
+                                log.info("[executor] marked todo %d as done", idx)
+                    except Exception as e:
+                        log.error("[executor] failed to mark todo done: %s", e)
+
                 observations.append(
                     {
                         "step_idx": state["step_idx"],
                         "tool": name,
                         "args": args,
-                        "result": str(result),
+                        "result": result_str,
                     }
                 )
         else:
@@ -157,6 +186,7 @@ def make_executor_node(model, tools, caveman: bool = False, caveman_mode: str = 
             "observations": observations,
             "step_idx": next_step,
             "draft_answer": draft_answer,
+            "todo_list": todo_list,
         }
 
     return executor

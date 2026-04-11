@@ -34,7 +34,11 @@ def _worker(code: str, q: "mp.Queue") -> None:
                     print(repr(val), file=buf)
         q.put(buf.getvalue())
     except Exception:
-        q.put(buf.getvalue() + "\n" + traceback.format_exc())
+        # Prepend line numbers to the code for better debugging in the traceback
+        lines = code.splitlines()
+        numbered_code = "\n".join(f"{i+1:3d}: {line}" for i, line in enumerate(lines))
+        error_msg = f"ERROR in agent-generated code:\n\n{numbered_code}\n\n{traceback.format_exc()}"
+        q.put(buf.getvalue() + "\n" + error_msg)
 
 
 def run_python(code: str, timeout: int = 30) -> str:
