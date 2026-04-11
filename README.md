@@ -17,6 +17,7 @@ hf_oauth_expiration_minutes: 480
 
 An AI agent that tackles the [GAIA benchmark](https://huggingface.co/datasets/gaia-benchmark/GAIA) — a suite of real-world, multi-step information-gathering tasks. The agent uses a **Plan → Execute → Verify** loop with two-tier model execution and runs either as a CLI tool or as a Hugging Face Space.
 
+<img width="8192" height="3617" alt="agent architecture" src="https://github.com/user-attachments/assets/324e84a8-a2ed-4b25-b09c-45fe6fc242a9" />
 
 ## Remove checkpoint
 `rm -rf .checkpoints/*`
