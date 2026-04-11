@@ -34,6 +34,7 @@ class AgentState(TypedDict):
     current_domain: str | None
     current_strategy: str | None
     retries: int
+    task_chronicle: str
     final_answer: str | None
 
 
@@ -52,5 +53,6 @@ def new_state(task_id: str, question: str) -> AgentState:
         current_domain=None,
         current_strategy=None,
         retries=0,
+        task_chronicle="",
         final_answer=None,
     )

@@ -2,9 +2,15 @@ from __future__ import annotations
 
 
 def route_next(state) -> str:
-    if state["draft_answer"]:
+    if state.get("draft_answer"):
         return "verifier"
     if state["step_idx"] >= len(state["plan"]):
         return "verifier"
-    current = state["plan"][state["step_idx"]]
-    return "exec_s1" if current["tier"] == "S1" else "exec_s2"
+    
+    # Route based on the domain determined by the Orchestrator
+    domain = state.get("current_domain") or "general"
+    valid_domains = ["math", "research", "vision", "audio", "file", "general"]
+    if domain not in valid_domains:
+        domain = "general"
+        
+    return f"exec_{domain}"

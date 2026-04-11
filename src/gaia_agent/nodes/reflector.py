@@ -6,13 +6,13 @@ import re
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from gaia_agent.llm_utils import extract_text
-from gaia_agent.prompts import REFLECTOR_SYSTEM
+from gaia_agent.prompts import REFLECTOR_SYSTEM, apply_caveman
 from gaia_agent.state import AgentState
 
 log = logging.getLogger(__name__)
 
 
-def make_reflector_node(model):
+def make_reflector_node(model, caveman: bool = False, caveman_mode: str = "full"):
     def reflector(state: AgentState) -> dict:
         # Check if we have observations to reflect on
         if not state["observations"]:
@@ -27,9 +27,12 @@ def make_reflector_node(model):
         context += f"Last Tool Result:\n{last_obs['result'][:2000]}\n" # Cap at 2k chars
 
         log.info("[reflector] reflecting on step %d", state["step_idx"] - 1)
+        
+        reflector_prompt = apply_caveman(REFLECTOR_SYSTEM, caveman, caveman_mode)
+        
         response = model.invoke(
             [
-                SystemMessage(content=REFLECTOR_SYSTEM),
+                SystemMessage(content=reflector_prompt),
                 HumanMessage(content=context),
             ]
         )
@@ -40,7 +43,16 @@ def make_reflector_node(model):
         new_memory = state["working_memory"]
         if "UPDATED WORKING MEMORY:" in raw_content:
             parts = raw_content.split("UPDATED WORKING MEMORY:")
-            new_memory = parts[1].split("MATCH FOUND:")[0].strip()
+            new_memory = parts[1].split("CHRONICLE UPDATE:")[0].strip()
+        
+        # Extract Task Chronicle update
+        new_chronicle = state["task_chronicle"]
+        if "CHRONICLE UPDATE:" in raw_content:
+            parts = raw_content.split("CHRONICLE UPDATE:")
+            update = parts[1].split("MATCH FOUND:")[0].strip()
+            if update and update not in new_chronicle:
+                prefix = f" - Step {state['step_idx']}: "
+                new_chronicle = (new_chronicle + "\n" + prefix + update).strip()
         
         # Check for Early Exit
         draft_answer = None
@@ -52,6 +64,7 @@ def make_reflector_node(model):
 
         return {
             "working_memory": new_memory,
+            "task_chronicle": new_chronicle,
             "draft_answer": draft_answer or state["draft_answer"]
         }
 

@@ -12,37 +12,9 @@ log = logging.getLogger(__name__)
 
 _MAX_OBS_CHARS = 2000
 
-_EVALUATE_SYSTEM = (
-    "You are the brain of a GAIA-style agent. After each tool execution, "
-    "you must decide: do we already have enough information to answer the question?\n"
-    "Respond ONLY with a valid JSON object:\n"
-    "{\n"
-    '  "has_answer": true/false,\n'
-    '  "draft_answer": "the answer (ONLY if has_answer is true, otherwise null)",\n'
-    '  "domain": "math|research|vision|audio|file|general",\n'
-    '  "strategy": "what to do next (ONLY if has_answer is false)"\n'
-    "}\n"
-    "CRITICAL RULES:\n"
-    "- If the question requires a CALCULATION and you have the raw data but haven't computed yet, "
-    "set has_answer=false and domain=math so the executor uses run_python.\n"
-    "- If you can already see the final answer in the observations, set has_answer=true immediately. "
-    "Don't waste steps searching for things you already know.\n"
-    "- The draft_answer must match the EXACT units/format the question asks for.\n"
-    "DOMAIN RULES:\n"
-    "- math: calculations, probability, numerical work -> executor MUST use run_python\n"
-    "- research: web search, reading papers, extracting facts\n"
-    "- vision: analyzing images or videos\n"
-    "- audio: listening to audio files, transcribing speech\n"
-    "- file: reading local documents (txt, Excel, CSV, etc.)\n"
-    "- general: simple reasoning or state management\n\n"
-    "CRITICAL ANTI-ROLEPLAY RULE: You are ONLY a router/evaluator. "
-    "YOU MUST NOT write Python code. YOU MUST NOT simulate tool calls. "
-    "DO NOT output any conversational text like 'I will search for...' or 'Let me fetch...'. "
-    "Output ABSOLUTELY NOTHING except the pure JSON object. No markdown, no backticks, no explanation."
-)
+from gaia_agent.prompts import ORCHESTRATOR_SYSTEM, apply_caveman
 
-
-def make_orchestrator_node(model):
+def make_orchestrator_node(model, caveman: bool = False, caveman_mode: str = "full"):
     def orchestrator(state: AgentState) -> dict:
         # If we already have a draft answer, skip orchestration
         if state["draft_answer"]:
@@ -57,7 +29,10 @@ def make_orchestrator_node(model):
         if state.get("modality") == "audio":
             lines.append("CRITICAL: This is an audio task. Prioritize 'audio' domain.")
 
-        lines.append("")
+        if state["task_chronicle"]:
+            lines.append("")
+            lines.append("Task Chronicle (High-Level Facts):")
+            lines.append(state["task_chronicle"])
         lines.append("Plan progress:")
         for i, step in enumerate(state["plan"]):
             done = "DONE" if i < state["step_idx"] else "TODO"
@@ -82,9 +57,12 @@ def make_orchestrator_node(model):
             lines.append("ALL PLAN STEPS ARE DONE. You MUST set has_answer=true and provide the draft_answer.")
 
         log.info("[orchestrator] evaluating after step %d", state["step_idx"])
+        
+        orch_prompt = apply_caveman(ORCHESTRATOR_SYSTEM, caveman, caveman_mode)
+        
         response = model.invoke(
             [
-                SystemMessage(content=_EVALUATE_SYSTEM),
+                SystemMessage(content=orch_prompt),
                 HumanMessage(content="\n".join(lines)),
             ]
         )

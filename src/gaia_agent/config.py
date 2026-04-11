@@ -21,12 +21,14 @@ class Config:
     tavily_api_key: str
     lmstudio_base_url: str
     max_tokens: int
+    caveman: bool = False
+    caveman_mode: str = "full"
 
     @classmethod
     def from_env(cls) -> "Config":
         return cls(
-            cheap_provider=os.getenv("GAIA_CHEAP_PROVIDER", "ollama"),
-            cheap_model=os.getenv("GAIA_CHEAP_MODEL", "gemma3:4b"),
+            cheap_provider=os.getenv("GAIA_CHEAP_PROVIDER", "google"),
+            cheap_model=os.getenv("GAIA_CHEAP_MODEL", "gemini-3-flash-preview"),
             strong_provider=os.getenv("GAIA_STRONG_PROVIDER", "anthropic"),
             strong_model=os.getenv("GAIA_STRONG_MODEL", "claude-sonnet-4-6"),
             extra_strong_provider=os.getenv("GAIA_EXTRA_STRONG_PROVIDER", os.getenv("GAIA_STRONG_PROVIDER", "anthropic")),
@@ -42,4 +44,6 @@ class Config:
             tavily_api_key=os.getenv("GAIA_TAVILY_API_KEY", ""),
             lmstudio_base_url=os.getenv("GAIA_LMSTUDIO_BASE_URL", ""),
             max_tokens=int(os.getenv("GAIA_MAX_TOKENS", "1024")),
+            caveman=os.getenv("GAIA_CAVEMAN", "false").lower() == "true",
+            caveman_mode=os.getenv("GAIA_CAVEMAN_MODE", "full"),
         )

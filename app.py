@@ -47,11 +47,13 @@ class GaiaAgent:
         self.graph = build_graph(
             perception_node=perception,
             planner_model=self.extra_strong,
-            orchestrator_model=self.strong,
-            executor_model_s1=self.strong,
-            executor_model_s2=self.strong,
+            orchestrator_model=self.cheap,
+            strong_model=self.strong,
+            cheap_model=self.cheap,
             verifier_model=self.strong,
             tools=self.tools,
+            caveman=self.cfg.caveman,
+            caveman_mode=self.cfg.caveman_mode,
         )
         print("GaiaAgent initialized.")
 

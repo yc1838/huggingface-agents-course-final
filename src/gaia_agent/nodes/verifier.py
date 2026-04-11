@@ -6,14 +6,14 @@ from langchain_core.messages import HumanMessage, SystemMessage
 
 from gaia_agent.json_utils import extract_json
 from gaia_agent.llm_utils import extract_text
-from gaia_agent.prompts import VERIFIER_SYSTEM
+from gaia_agent.prompts import VERIFIER_SYSTEM, apply_caveman
 
 log = logging.getLogger(__name__)
 MAX_RETRIES = 5
 _MAX_OBS_CHARS = 8000
 
 
-def make_verifier_node(model):
+def make_verifier_node(model, caveman: bool = False, caveman_mode: str = "full"):
     def verifier(state) -> dict:
         lines = [
             f"Question: {state['question']}",
@@ -33,9 +33,12 @@ def make_verifier_node(model):
                 lines.append(f"- [{observation['tool']}] {result}")
 
         log.info("[verifier] draft_answer=%r  retries=%d", state["draft_answer"], state["retries"])
+        
+        verifier_prompt = apply_caveman(VERIFIER_SYSTEM, caveman, caveman_mode)
+        
         response = model.invoke(
             [
-                SystemMessage(content=VERIFIER_SYSTEM),
+                SystemMessage(content=verifier_prompt),
                 HumanMessage(content="\n".join(lines)),
             ]
         )

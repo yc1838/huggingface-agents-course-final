@@ -8,6 +8,7 @@ from gaia_agent.tools.audio import transcribe_audio as _transcribe_audio
 from gaia_agent.tools.files import read_file as _read_file
 from gaia_agent.tools.pdf import inspect_pdf as _inspect_pdf
 from gaia_agent.tools.python_exec import run_python as _run_python
+from gaia_agent.tools.ddg_search import web_search as _web_search
 from gaia_agent.tools.search import tavily_search as _tavily_search
 from gaia_agent.tools.vision import inspect_visual_content as _inspect_visual_content
 from gaia_agent.tools.web import fetch_url as _fetch_url
@@ -19,8 +20,13 @@ def build_tools(cfg: Config) -> list[BaseTool]:
     """Build the list of LangChain tools, injecting config via closures."""
 
     @tool
+    def web_search(query: str, max_results: int = 5) -> str:
+        """Search the web via DuckDuckGo. Returns a list of title/url/snippet results. No API key needed."""
+        return _web_search(query, max_results=max_results)
+
+    @tool
     def tavily_search(query: str, max_results: int = 5) -> str:
-        """Search the web via Tavily. Returns a list of title/url/snippet results."""
+        """Search the web via Tavily (backup). Returns a list of title/url/snippet results."""
         return _tavily_search(query, api_key=cfg.tavily_api_key, max_results=max_results)
 
     @tool
@@ -67,6 +73,7 @@ def build_tools(cfg: Config) -> list[BaseTool]:
         return _arxiv_search(query, max_results=max_results)
 
     return [
+        web_search,
         tavily_search,
         fetch_url,
         run_python,

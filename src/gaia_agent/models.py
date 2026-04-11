@@ -13,6 +13,30 @@ from langchain_openai import ChatOpenAI
 import logging
 from gaia_agent.config import Config
 
+try:
+    from langchain_community.cache import SQLiteCache
+except ImportError:
+    try:
+        from langchain.cache import SQLiteCache
+    except ImportError:
+        SQLiteCache = None
+
+try:
+    from langchain_core.globals import set_llm_cache
+except ImportError:
+    try:
+        from langchain.globals import set_llm_cache
+    except ImportError:
+        set_llm_cache = None
+
+# Enable LLM cache for development efficiency
+if SQLiteCache:
+    try:
+        set_llm_cache(SQLiteCache(database_path=".langchain.db"))
+    except Exception as e:
+        # Fail gracefully if sqlite is missing or DB file locked
+        pass
+
 log = logging.getLogger(__name__)
 
 LMSTUDIO_DEFAULT_BASE_URL = "http://localhost:1234/v1"

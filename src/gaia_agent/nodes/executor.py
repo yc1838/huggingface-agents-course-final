@@ -13,6 +13,7 @@ from gaia_agent.prompts import (
     MATH_SPECIALIST,
     RESEARCH_SPECIALIST,
     VISION_SPECIALIST,
+    apply_caveman,
 )
 from gaia_agent.state import AgentState, Observation
 
@@ -59,7 +60,7 @@ def _format_context(state: AgentState) -> str:
     return "\n".join(lines)
 
 
-def make_executor_node(model, tools):
+def make_executor_node(model, tools, caveman: bool = False, caveman_mode: str = "full"):
     tools_by_name = {tool.name: tool for tool in tools}
     bound_model = model.bind_tools(tools)
 
@@ -72,10 +73,11 @@ def make_executor_node(model, tools):
         domain = state.get("current_domain") or "general"
         specialist_prompt = _SPECIALISTS.get(domain, GENERAL_EXECUTOR)
         system_content = f"{BASE_EXECUTOR}\n\n{specialist_prompt}"
+        executor_prompt = apply_caveman(system_content, caveman, caveman_mode)
         
         response = bound_model.invoke(
             [
-                SystemMessage(content=system_content),
+                SystemMessage(content=executor_prompt),
                 HumanMessage(content=_format_context(state)),
             ]
         )
@@ -140,9 +142,10 @@ def make_executor_node(model, tools):
                 if len(r) > _MAX_OBS_CHARS:
                     r = r[:_MAX_OBS_CHARS] + "...[truncated]"
                 synthesis_prompt += f"- [{obs['tool']}]: {r}\n"
+            synth_system = apply_caveman("You produce short, exact answers. Nothing else.", caveman, caveman_mode)
             synth_response = model.invoke(
                 [
-                    SystemMessage(content="You produce short, exact answers. Nothing else."),
+                    SystemMessage(content=synth_system),
                     HumanMessage(content=synthesis_prompt),
                 ]
             )

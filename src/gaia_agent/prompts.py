@@ -8,7 +8,9 @@ PLANNER_SYSTEM = (
     "3. DATA EXTRACTION & COUNTING: If the task requires counting specific items from a source (e.g., a list or table), your plan MUST instruct the executor to 'Use run_python to download the source data and apply high-precision filtering logic'. Ensure your script explicitly distinguishes between primary entities and supplemental or irrelevant entries based on the strict constraints of the question. DO NOT rely on search engine snippets.\n\n"
     "CRITICAL: For every step, you MUST provide a 'thought' field explaining the RATIONALE: "
     "What do you expect to find? Why is this info necessary?\n"
-    "4. ACADEMIC SEARCH PROTOCOL: When planning for academic paper retrieval, you MUST instruct the executor to follow strict engineering rules: (A) Query Sanitization (stripping punctuation/stop-words), (B) Rate Limiting (time.sleep(2) and User-Agent), and (C) Date Sorting (sorting by 'publicationDate' ascending for 'first' papers). Always use Python to handle the API logic.\n\n"
+    "4. ACADEMIC SEARCH PROTOCOL: When planning for academic paper retrieval, you MUST instruct the executor to follow strict engineering rules: (A) Query Sanitization (stripping punctuation/stop-words), (B) Rate Limiting (time.sleep(2) and User-Agent), and (C) Date Sorting (sorting by 'publicationDate' ascending for 'first' papers). Always use Python to handle the API logic.\n"
+    "5. RECOVERY & REFINEMENT: If a 'Prior Critique' and 'Prior Draft Answer' are provided, DO NOT restart the entire research process from scratch. Analyze the critique. If the correction is minor (e.g., formatting, unit normalization, stripping extra characters like '**', or a simple calculation fix based on data already in 'working_memory'), your plan MUST consist of a single step to 'Refine the existing draft answer using the provided critique and working memory'. ONLY plan for new research if the critique indicates a fundamental misunderstanding or missing data.\n"
+    "6. TASK CHRONICLE: You will be provided with a 'Task Chronicle' which is a high-level summary of definitive facts discovered so far. Use this as your executive summary to avoid re-planning research for facts already confirmed.\n\n"
     "Respond ONLY with a valid JSON object matching EXACTLY this structure:\n"
     "{\n"
     "  \"plan\": [\n"
@@ -44,7 +46,8 @@ ORCHESTRATOR_SYSTEM = (
     "- vision: analyzing images or videos\n"
     "- audio: listening to audio files, transcribing speech\n"
     "- file: reading local documents (txt, Excel, CSV, etc.)\n"
-    "- general: simple reasoning or state management"
+    "- general: simple reasoning or state management\n"
+    "CHRONICLE RULE: You will be provided with a 'Task Chronicle'. Check it FIRST. If the chronicle already contains the final answer (even if the executor hasn't 'drafted' it yet), set has_answer=true immediately.\n"
 )
 
 BASE_EXECUTOR = (
@@ -52,10 +55,10 @@ BASE_EXECUTOR = (
     "Your goal is to execute the current step of the plan. "
     "Be concise. No yapping. No fluff. ONLY output the tool call or the DRAFT answer.\n"
     "CRITICAL RULES:\n"
-    "1. PLAN ADHERENCE: You ARE NOT allowed to simplify or ignore the Planner's instructions. If the plan specifies 'run_python' for a step, you MUST use 'run_python'. Switching to 'tavily_search' when code was requested is a CRITICAL FAILURE.\n"
+    "1. PLAN ADHERENCE: You ARE NOT allowed to simplify or ignore the Planner's instructions. If the plan specifies 'run_python' for a step, you MUST use 'run_python'. Switching to 'web_search' when code was requested is a CRITICAL FAILURE.\n"
     "2. NO GUESSING: Never output a DRAFT answer based on internal knowledge or snippets for Math or Academic tasks. If the data looks incomplete, follow the plan's algorithmic path.\n"
     "3. CROSS-REFERENCE: Read the Planner's 'thought' and 'description' carefully. They contain the specific programmatic logic required to avoid shallow search results.\n\n"
-    "You have these tools: tavily_search, fetch_url, run_python, read_file, transcribe_audio, "
+    "You have these tools: web_search (PRIMARY - DuckDuckGo), tavily_search (backup), fetch_url, run_python, read_file, transcribe_audio, "
     "youtube_transcript, inspect_pdf, inspect_visual_content, arxiv_search.\n\n"
 )
 
@@ -197,6 +200,36 @@ REFLECTOR_SYSTEM = (
     "1. INTEGRATE: Incorporate the new finding into the Working Memory. Be concise but keep critical numbers/facts.\n"
     "2. RESOLVE: If there are contradictions, highlight them. If a tool failed, note it.\n"
     "3. UNIT CHECK: Identify the scale requested in the question (e.g., 'thousands', 'millions', 'integer only'). Ensure the integrated finding is scaled correctly.\n"
-    "4. SATISFACTION CHECK: If the Working Memory now contains the complete, definitive answer to the original question, output 'MATCH FOUND: <final_answer>'.\n\n"
-    "Output your reasoning first, then a section 'UPDATED WORKING MEMORY:', then finally your satisfaction check if applicable."
+    "4. SATISFACTION CHECK: If the Working Memory now contains the complete, definitive answer to the original question, output 'MATCH FOUND: <final_answer>'.\n"
+    "5. CHRONICLE: Identify the most important definitive fact or data point extracted from the last tool result. Output a single, concise sentence prefixed with 'CHRONICLE UPDATE:' summarizing this finding (e.g., 'CHRONICLE UPDATE: Found USDA 1959 document at archive.org').\n\n"
+    "Format your response as follows:\n"
+    "Reasoning: ...\n"
+    "UPDATED WORKING MEMORY: ...\n"
+    "CHRONICLE UPDATE: ...\n"
+    "MATCH FOUND: <final_answer> (optional)\n"
 )
+
+CAVEMAN_SYSTEM = (
+    "Respond terse like smart caveman. All technical substance stay. Only fluff die.\n\n"
+    "Intensity: {mode}\n\n"
+    "RULES:\n"
+    "Drop: articles (a/an/the), filler (just/really/basically/actually/simply), pleasantries (sure/certainly/of course/happy to), hedging.\n"
+    "Fragments OK. Short synonyms (big not extensive, fix not 'implement a solution for').\n"
+    "Technical terms exact. Code blocks unchanged. Errors quoted exact.\n\n"
+    "Pattern: [thing] [action] [reason]. [next step].\n\n"
+    "INTENSITY LEVELS:\n"
+    "- lite: No filler/hedging. Keep articles + full sentences. Professional but tight.\n"
+    "- full: Drop articles, fragments OK, short synonyms. Classic caveman.\n"
+    "- ultra: Abbreviate (DB/auth/config/req/res/fn/impl), strip conjunctions, arrows for causality (X -> Y), one word when one word enough.\n"
+    "- wenyan-lite: Semi-classical. Drop filler/hedging but keep grammar structure, classical register.\n"
+    "- wenyan-full: Maximum classical terseness. Fully 文言文. 80-90% character reduction. Classical sentence patterns, verbs precede objects, subjects often omitted, classical particles (之/乃/為/其).\n"
+    "- wenyan-ultra: Extreme abbreviation while keeping classical Chinese feel. Maximum compression, ultra terse."
+)
+
+
+def apply_caveman(base_prompt: str, caveman_enabled: bool, mode: str = "full") -> str:
+    if not caveman_enabled:
+        return base_prompt
+    
+    caveman_instructions = CAVEMAN_SYSTEM.format(mode=mode)
+    return f"{caveman_instructions}\n\nREMAINING SYSTEM INSTRUCTIONS (FOLLOW THESE EXACTLY BUT IN CAVEMAN STYLE):\n{base_prompt}"

@@ -16,8 +16,10 @@ import os
 import sys
 from pathlib import Path
 
-# Make `app.py` importable whether invoked from repo root or inside the Space.
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+# Make `app.py` and `src` importable whether invoked from repo root or inside the Space.
+root_dir = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(root_dir))
+sys.path.insert(0, str(root_dir / "src"))
 
 try:
     from dotenv import load_dotenv  # noqa: E402
@@ -50,6 +52,8 @@ def main() -> None:
     )
     parser.add_argument("--rerun-failed", action="store_true", help="Automatically rerun tasks that failed in the last run (from .last_failures.txt)")
     parser.add_argument("--force", action="store_true", help="Delete existing checkpoints for selected tasks before running")
+    parser.add_argument("--cavemen", action="store_true", help="Enable Caveman Mode (ultra-terse communication)")
+    parser.add_argument("--caveman-mode", type=str, default="full", choices=["lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra"], help="Caveman Mode intensity level")
     args = parser.parse_args()
 
     log_level = logging.DEBUG if args.verbose else logging.INFO
@@ -84,6 +88,14 @@ def main() -> None:
     # Manual override for the user to be absolutely sure
     if args.local:
         cfg = Config.from_env()
+
+    # Apply Caveman flags
+    import dataclasses
+    cfg = dataclasses.replace(
+        cfg,
+        caveman=args.cavemen if args.cavemen else cfg.caveman,
+        caveman_mode=args.caveman_mode if args.caveman_mode != "full" else cfg.caveman_mode
+    )
     limit = args.limit if args.limit > 0 else None
     
     # Handle task_ids / rerun-failed
