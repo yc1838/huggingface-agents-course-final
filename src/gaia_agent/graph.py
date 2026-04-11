@@ -26,7 +26,7 @@ def build_graph(
     graph = StateGraph(AgentState)
 
     graph.add_node("perception", perception_node)
-    graph.add_node("planner", make_planner_node(planner_model, caveman=caveman, caveman_mode=caveman_mode))
+    graph.add_node("planner", make_planner_node(planner_model, cheap_model=cheap_model, caveman=caveman, caveman_mode=caveman_mode))
     
     # MISSION 2: Specialized Multi-Agent Nodes
     # The State Manager uses the CHEAP model for dispatching and orchestrating todos

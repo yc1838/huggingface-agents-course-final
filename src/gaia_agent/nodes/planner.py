@@ -4,15 +4,26 @@ import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from gaia_agent.json_utils import extract_json
 from gaia_agent.llm_utils import extract_text
 from gaia_agent.prompts import PLANNER_SYSTEM, apply_caveman
-from gaia_agent.state import AgentState, PlanStep
+from gaia_agent.state import AgentState
 
 log = logging.getLogger(__name__)
 
 
-def make_planner_node(model, caveman: bool = False, caveman_mode: str = "full"):
+from pydantic import BaseModel, Field
+from gaia_agent.json_repair import EmptyResponseError, UnsalvageableJsonError, safe_structured_call
+
+class PlanStepSchema(BaseModel):
+    thought: str = Field(description="Rationale for this step")
+    description: str = Field(description="Detailed action description")
+    tier: str = Field(default="S1", description="Model tier (S1/S2)")
+
+class PlanSchema(BaseModel):
+    plan: list[PlanStepSchema]
+
+
+def make_planner_node(model, cheap_model=None, caveman: bool = False, caveman_mode: str = "full"):
     def planner(state: AgentState) -> dict:
         human_lines = [f"Question: {state['question']}"]
         if state["file_path"]:
@@ -33,67 +44,43 @@ def make_planner_node(model, caveman: bool = False, caveman_mode: str = "full"):
         
         planner_prompt = apply_caveman(PLANNER_SYSTEM, caveman, caveman_mode)
         
-        response = model.invoke(
-            [
-                SystemMessage(content=planner_prompt),
-                HumanMessage(content="\n".join(human_lines)),
-            ]
-        )
-        # EXTREME LOGGING: Capture everything about the response
         try:
-            log.info("[planner] response metadata: %r", getattr(response, "response_metadata", {}))
-            log.info("[planner] usage metadata: %r", getattr(response, "usage_metadata", {}))
-            log.info("[planner] additional_kwargs: %r", getattr(response, "additional_kwargs", {}))
-        except Exception as e:
-            log.warning("[planner] failed to log metadata: %s", e)
+            plan_obj = safe_structured_call(
+                model=model,
+                messages=[
+                    SystemMessage(content=planner_prompt),
+                    HumanMessage(content="\n".join(human_lines)),
+                ],
+                target_schema=PlanSchema,
+                cheap_fixer_model=cheap_model,
+                node_name="planner",
+            )
+            plan = [step.model_dump() for step in plan_obj.plan]
+        except EmptyResponseError:
+            log.warning("[planner] empty response — default to empty plan")
+            plan = []
+        except UnsalvageableJsonError as e:
+            log.error("[planner] JSON unsalvageable: %s", e)
+            return {
+                "plan": [],
+                "step_idx": 0,
+                "todo_list": [],
+                "json_repair_retries": state["json_repair_retries"] + 1,
+                "draft_answer": None,
+                "critique": None,
+            }
 
-        raw = extract_text(response.content)
-        log.info("[planner] raw response (len=%d):\n%r", len(raw), raw)
-        payload = extract_json(raw)
-        if not isinstance(payload, dict):
-            log.warning("[planner] payload is not a dict: %r", payload)
-            payload = {"plan": []}
-
-        plan_raw = payload.get("plan", [])
-        if not isinstance(plan_raw, list):
-            plan_raw = []
-
-        log.info("[planner] plan steps: %s", [s.get("description", str(s)) if isinstance(s, dict) else str(s) for s in plan_raw])
-        plan = []
-        for step in plan_raw:
-            thought = "No rationale provided."
-            description = str(step)
-            tier = "S1"
-
-            if isinstance(step, dict):
-                thought = step.get("thought", thought)
-                description = step.get("description", description)
-                tier = step.get("tier", tier)
-            elif isinstance(step, str):
-                # Aggressively try to find JSON if it's a string
-                trimmed = step.strip()
-                start_idx = trimmed.find("{")
-                end_idx = trimmed.rfind("}")
-                if start_idx != -1 and end_idx != -1 and end_idx > start_idx:
-                    json_candidate = trimmed[start_idx : end_idx + 1]
-                    try:
-                        nested = extract_json(json_candidate)
-                        if isinstance(nested, dict):
-                            thought = nested.get("thought", thought)
-                            description = nested.get("description", description)
-                            tier = nested.get("tier", tier)
-                    except Exception:
-                        pass
-
-            plan.append({"thought": thought, "description": description, "tier": tier})
-
+        log.info("[planner] final plan steps: %s", [s["description"] for s in plan])
+        
         return {
             "plan": plan,
             "step_idx": 0,
             "observations": state["observations"] if state["critique"] else [],
             "working_memory": state["working_memory"] if state["critique"] else "",
+            "todo_list": [s["description"] for s in plan],
             "draft_answer": None,
             "critique": None,
+            "json_repair_retries": state["json_repair_retries"],
         }
 
     return planner

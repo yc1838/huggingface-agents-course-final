@@ -37,6 +37,7 @@ class AgentState(TypedDict):
     task_chronicle: str
     todo_list: list[str]
     final_answer: str | None
+    json_repair_retries: int
 
 
 def new_state(task_id: str, question: str) -> AgentState:
@@ -57,4 +58,5 @@ def new_state(task_id: str, question: str) -> AgentState:
         task_chronicle="",
         todo_list=[],
         final_answer=None,
+        json_repair_retries=0,
     )

@@ -21,6 +21,7 @@ class Config:
     tavily_api_key: str
     lmstudio_base_url: str
     max_tokens: int
+    max_json_repairs: int = 5
     caveman: bool = False
     caveman_mode: str = "full"
 
@@ -44,6 +45,7 @@ class Config:
             tavily_api_key=os.getenv("GAIA_TAVILY_API_KEY", ""),
             lmstudio_base_url=os.getenv("GAIA_LMSTUDIO_BASE_URL", ""),
             max_tokens=int(os.getenv("GAIA_MAX_TOKENS", "1024")),
+            max_json_repairs=int(os.getenv("GAIA_MAX_JSON_REPAIRS", "5")),
             caveman=os.getenv("GAIA_CAVEMAN", "false").lower() == "true",
             caveman_mode=os.getenv("GAIA_CAVEMAN_MODE", "full"),
         )
