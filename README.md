@@ -23,7 +23,12 @@ An AI agent that tackles the [GAIA benchmark](https://huggingface.co/datasets/ga
 `rm -rf .checkpoints/*`
 test run: `python scripts/dev_run_gaia.py --limit 1 --level 1`
 full run: `python scripts/dev_run_gaia.py --limit 6 --level 2  --cavemen --caveman-mode ultra 2>&1 | tee gaia_v28.log`
+rerun with gemma4 model:
+`python scripts/dev_run_gaia.py --limit 20 --level 2 --rerun-failed --force  --cavemen --caveman-mode ultra --gemma4 2>&1 | tee gaia_v45.log`
+run but turn off gemma4 model and use cloud models set in .env: `python scripts/dev_run_gaia.py --no-gemma4`
 
+
+--gemma4 means both strong & cheap model will use Gemini API call gemma4.
 ## Architecture
 
 ```

@@ -12,6 +12,9 @@ class Config:
     strong_model: str
     extra_strong_provider: str
     extra_strong_model: str
+    vision_provider: str
+    vision_model: str
+    fal_vision_api_key: str
     api_url: str
     checkpoint_dir: str
     whisper_model: str
@@ -34,6 +37,9 @@ class Config:
             strong_model=os.getenv("GAIA_STRONG_MODEL", "claude-sonnet-4-6"),
             extra_strong_provider=os.getenv("GAIA_EXTRA_STRONG_PROVIDER", os.getenv("GAIA_STRONG_PROVIDER", "anthropic")),
             extra_strong_model=os.getenv("GAIA_EXTRA_STRONG_MODEL", os.getenv("GAIA_STRONG_MODEL", "claude-sonnet-4-6")),
+            vision_provider=os.getenv("GAIA_VISION_PROVIDER", "google"),
+            vision_model=os.getenv("GAIA_VISION_MODEL", "gemini-3-flash-preview"),
+            fal_vision_api_key=os.getenv("GAIA_FAL_VISION_API_KEY", ""),
             api_url=os.getenv(
                 "GAIA_API_URL", "https://agents-course-unit4-scoring.hf.space"
             ),

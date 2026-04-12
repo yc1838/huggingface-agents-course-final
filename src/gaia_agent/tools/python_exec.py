@@ -41,7 +41,7 @@ def _worker(code: str, q: "mp.Queue") -> None:
         q.put(buf.getvalue() + "\n" + error_msg)
 
 
-def run_python(code: str, timeout: int = 30) -> str:
+def run_python(code: str, timeout: int = 60) -> str:
     ctx = mp.get_context("spawn")
     q: mp.Queue = ctx.Queue()
     p = ctx.Process(target=_worker, args=(code, q))

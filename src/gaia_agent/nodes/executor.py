@@ -94,6 +94,10 @@ def make_executor_node(model, tools, caveman: bool = False, caveman_mode: str = 
         draft_answer = state["draft_answer"]
         tool_calls = getattr(response, "tool_calls", None) or []
         log.info("[executor] tool_calls=%s", [tc["name"] for tc in tool_calls])
+        
+        step_failed = False
+        todo_list = list(state.get("todo_list", []))
+        
         if tool_calls:
             for tool_call in tool_calls:
                 name = tool_call["name"]
@@ -103,8 +107,12 @@ def make_executor_node(model, tools, caveman: bool = False, caveman_mode: str = 
                 result_str = str(result)
                 log.info("[executor] tool result (%d chars): %s", len(result_str), result_str)
                 
+                # Check for failure (Tracebacks)
+                if "Traceback (most recent call last):" in result_str or "Error:" in result_str:
+                    log.warning("[executor] tool call failed: %s", name)
+                    step_failed = True
+                
                 # Special handling for Todo tools
-                todo_list = list(state.get("todo_list", []))
                 if result_str.startswith("SET_TODOS:"):
                     import ast
                     try:
@@ -149,9 +157,11 @@ def make_executor_node(model, tools, caveman: bool = False, caveman_mode: str = 
                 )
 
         next_step = state["step_idx"] + 1
+        
         # If this was the last plan step and we still have no draft,
         # ask the model (without tools) to synthesize an answer from observations.
-        if draft_answer is None and next_step >= len(state["plan"]):
+        # CRITICAL FIX: Only force synthesis if the step didn't fail (no traceback)
+        if draft_answer is None and next_step >= len(state["plan"]) and not step_failed:
             log.info("[executor] all steps done, no draft — forcing synthesis")
             synthesis_prompt = (
                 f"Question: {state['question']}\n\n"

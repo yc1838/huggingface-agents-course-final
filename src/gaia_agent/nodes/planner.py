@@ -55,12 +55,11 @@ def make_planner_node(model, cheap_model=None, caveman: bool = False, caveman_mo
                 cheap_fixer_model=cheap_model,
                 node_name="planner",
             )
-            plan = [step.model_dump() for step in plan_obj.plan]
-        except EmptyResponseError:
-            log.warning("[planner] empty response — default to empty plan")
-            plan = []
-        except UnsalvageableJsonError as e:
-            log.error("[planner] JSON unsalvageable: %s", e)
+            # Support both {plan: [...]} and sometimes direct list extraction if schema allows
+            plan_data = plan_obj.plan if hasattr(plan_obj, "plan") else plan_obj
+            plan = [step.model_dump() for step in plan_data]
+        except (EmptyResponseError, UnsalvageableJsonError) as e:
+            log.error("[planner] plan extraction failed or returned empty: %s", e)
             return {
                 "plan": [],
                 "step_idx": 0,

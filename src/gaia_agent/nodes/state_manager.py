@@ -12,9 +12,19 @@ log = logging.getLogger(__name__)
 
 _MAX_OBS_CHARS = 2000
 
+from typing import Literal, Optional
+from pydantic import BaseModel, Field
+from gaia_agent.json_repair import EmptyResponseError, UnsalvageableJsonError, safe_structured_call
+
+class StateManagerSchema(BaseModel):
+    has_answer: bool = Field(description="True if we have a definitive answer ready.")
+    draft_answer: Optional[str] = Field(default=None, description="The draft answer if has_answer is True.")
+    domain: Literal["math", "research", "vision", "audio", "file", "general"] = Field(default="general")
+    strategy: str = Field(description="A brief description of the next step or strategy.")
+
 from gaia_agent.prompts import STATE_MANAGER_SYSTEM, apply_caveman
 
-def make_state_manager_node(model, caveman: bool = False, caveman_mode: str = "full"):
+def make_state_manager_node(model, cheap_model=None, caveman: bool = False, caveman_mode: str = "full"):
     def state_manager(state: AgentState) -> dict:
         # If we already have a draft answer, skip
         if state["draft_answer"]:
@@ -54,41 +64,65 @@ def make_state_manager_node(model, caveman: bool = False, caveman_mode: str = "f
         
         sm_prompt = apply_caveman(STATE_MANAGER_SYSTEM, caveman, caveman_mode)
         
-        response = model.invoke(
-            [
-                SystemMessage(content=sm_prompt),
-                HumanMessage(content="\n".join(lines)),
-            ]
-        )
-
-        raw = extract_text(response.content)
-        log.info("[state_manager] raw response (len=%d): %r", len(raw), raw[:500] if raw else '')
         try:
-            payload = extract_json(raw)
-        except Exception:
-            log.warning("[state_manager] failed to parse JSON, defaulting to general")
-            payload = {"has_answer": False, "domain": "general", "strategy": "continue"}
+            payload = safe_structured_call(
+                model=model,
+                messages=[
+                    SystemMessage(content=sm_prompt),
+                    HumanMessage(content="\n".join(lines)),
+                ],
+                target_schema=StateManagerSchema,
+                cheap_fixer_model=cheap_model,
+                node_name="state_manager",
+            )
+            
+            has_answer = payload.has_answer
+            domain = payload.domain
+            strategy = payload.strategy
+            draft_answer = payload.draft_answer
+            replan_count = state["replan_count"]
 
-        if not isinstance(payload, dict):
-            payload = {"has_answer": False, "domain": "general", "strategy": "Analyze observations."}
+            # SAFETY CHECK: If no answer and no todos, we are stuck
+            if not has_answer and not state["todo_list"]:
+                replan_count += 1
+                log.warning("[state_manager] no plan steps and no answer — forcing a re-plan (attempt %d/3)", replan_count)
+                if replan_count > 3:
+                    log.error("[state_manager] CRITICAL: Re-plan limit reached. Forcing failure state.")
+                    has_answer = True
+                    draft_answer = "AGENT ERROR: Task could not be planned after multiple attempts. Possible data retrieval failure or ambiguous request."
+                else:
+                    domain = "research"
+                    strategy = (
+                        f"All previous plan steps exhausted without a result. This is plan attempt #{replan_count + 1}. "
+                        f"Previous Critique: {state['critique'] or 'None'}. "
+                        "We MUST re-plan with more granular search steps or alternative sources. Do NOT repeat the failed plan."
+                    )
 
-        has_answer = payload.get("has_answer", False)
-        domain = payload.get("domain", "general")
-        strategy = payload.get("strategy", "")
+            if has_answer and draft_answer:
+                draft = str(draft_answer).strip()
+                log.info("[state_manager] EARLY EXIT — draft_answer=%r", draft)
+                return {
+                    "draft_answer": draft,
+                    "current_domain": domain,
+                    "current_strategy": strategy,
+                    "json_repair_retries": state["json_repair_retries"],
+                    "replan_count": replan_count,
+                }
 
-        if has_answer and payload.get("draft_answer"):
-            draft = str(payload["draft_answer"]).strip()
-            log.info("[state_manager] EARLY EXIT — draft_answer=%r", draft)
+            log.info("[state_manager] domain=%s strategy=%s", domain, strategy)
             return {
-                "draft_answer": draft,
                 "current_domain": domain,
                 "current_strategy": strategy,
+                "json_repair_retries": state["json_repair_retries"],
+                "replan_count": replan_count,
             }
-
-        log.info("[state_manager] domain=%s strategy=%s", domain, strategy)
-        return {
-            "current_domain": domain,
-            "current_strategy": strategy,
-        }
+            
+        except (EmptyResponseError, UnsalvageableJsonError) as e:
+            log.warning("[state_manager] structured call failed: %s. Defaulting to general/continue", e)
+            return {
+                "current_domain": "general",
+                "current_strategy": "Continue with current plan.",
+                "json_repair_retries": state["json_repair_retries"] + 1,
+            }
 
     return state_manager

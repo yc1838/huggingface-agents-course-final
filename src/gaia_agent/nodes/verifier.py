@@ -4,16 +4,24 @@ import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from gaia_agent.json_utils import extract_json
 from gaia_agent.llm_utils import extract_text
 from gaia_agent.prompts import VERIFIER_SYSTEM, apply_caveman
 
 log = logging.getLogger(__name__)
-MAX_RETRIES = 10
+MAX_RETRIES = 6
 _MAX_OBS_CHARS = 8000
 
 
-def make_verifier_node(model, caveman: bool = False, caveman_mode: str = "full"):
+from pydantic import BaseModel, Field
+from typing import Literal
+from gaia_agent.json_repair import EmptyResponseError, UnsalvageableJsonError, safe_structured_call
+
+class VerifierSchema(BaseModel):
+    decision: Literal["APPROVED", "REJECTED"] = Field(description="APPROVED if the draft answer is correct and complete, REJECTED otherwise.")
+    critique: str = Field(description="Detailed explanation of why the answer was rejected, or why it was approved.")
+
+
+def make_verifier_node(model, cheap_model=None, caveman: bool = False, caveman_mode: str = "full"):
     def verifier(state) -> dict:
         lines = [
             f"Question: {state['question']}",
@@ -36,29 +44,46 @@ def make_verifier_node(model, caveman: bool = False, caveman_mode: str = "full")
         
         verifier_prompt = apply_caveman(VERIFIER_SYSTEM, caveman, caveman_mode)
         
-        response = model.invoke(
-            [
-                SystemMessage(content=verifier_prompt),
-                HumanMessage(content="\n".join(lines)),
-            ]
-        )
-        raw = extract_text(response.content)
-        log.debug("[verifier] raw response:\n%s", raw)
         try:
-            payload = extract_json(raw)
-        except Exception:
-            log.warning("[verifier] failed to parse JSON, rejecting draft")
-            payload = {"decision": "REJECTED", "critique": "Verifier response was not valid JSON; re-plan."}
-        log.info("[verifier] decision=%s  critique=%s", payload.get("decision"), payload.get("critique"))
-        if payload.get("decision") == "APPROVED":
-            return {"final_answer": state["draft_answer"], "critique": None}
+            payload = safe_structured_call(
+                model=model,
+                messages=[
+                    SystemMessage(content=verifier_prompt),
+                    HumanMessage(content="\n".join(lines)),
+                ],
+                target_schema=VerifierSchema,
+                cheap_fixer_model=cheap_model,
+                node_name="verifier",
+            )
+            
+            decision = payload.decision
+            critique = payload.critique
 
-        return {
-            "critique": payload.get("critique") or "Answer rejected without explanation.",
-            "draft_answer": None,
-            "final_answer": None,
-            "retries": state["retries"] + 1,
-        }
+            log.info("[verifier] decision=%s  critique=%s", decision, critique)
+            if decision == "APPROVED":
+                return {
+                    "final_answer": state["draft_answer"], 
+                    "critique": None,
+                    "json_repair_retries": state["json_repair_retries"],
+                }
+
+            return {
+                "critique": critique or "Answer rejected without explanation.",
+                "draft_answer": None,
+                "final_answer": None,
+                "retries": state["retries"] + 1,
+                "json_repair_retries": state["json_repair_retries"],
+            }
+            
+        except (EmptyResponseError, UnsalvageableJsonError) as e:
+            log.warning("[verifier] structured call failed: %s. Defaulting to REJECTED", e)
+            return {
+                "critique": f"Verifier crash: {str(e)}",
+                "draft_answer": None,
+                "final_answer": None,
+                "retries": state["retries"] + 1,
+                "json_repair_retries": state["json_repair_retries"] + 1,
+            }
 
     return verifier
 

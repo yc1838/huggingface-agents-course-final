@@ -30,7 +30,7 @@ def build_graph(
     
     # MISSION 2: Specialized Multi-Agent Nodes
     # The State Manager uses the CHEAP model for dispatching and orchestrating todos
-    graph.add_node("state_manager", make_state_manager_node(cheap_model, caveman=caveman, caveman_mode=caveman_mode))
+    graph.add_node("state_manager", make_state_manager_node(cheap_model, cheap_model=cheap_model, caveman=caveman, caveman_mode=caveman_mode))
     
     # Use CHEAP model for structured execution (Math)
     graph.add_node("exec_math", make_executor_node(cheap_model, tools, caveman=caveman, caveman_mode=caveman_mode))
@@ -42,8 +42,8 @@ def build_graph(
     graph.add_node("exec_file", make_executor_node(strong_model, tools, caveman=caveman, caveman_mode=caveman_mode))
     graph.add_node("exec_general", make_executor_node(strong_model, tools, caveman=caveman, caveman_mode=caveman_mode))
 
-    graph.add_node("reflector", make_reflector_node(verifier_model, caveman=caveman, caveman_mode=caveman_mode))
-    graph.add_node("verifier", make_verifier_node(verifier_model, caveman=caveman, caveman_mode=caveman_mode))
+    graph.add_node("reflector", make_reflector_node(verifier_model, cheap_model=cheap_model, caveman=caveman, caveman_mode=caveman_mode))
+    graph.add_node("verifier", make_verifier_node(verifier_model, cheap_model=cheap_model, caveman=caveman, caveman_mode=caveman_mode))
     graph.add_node("formatter", make_formatter_node(verifier_model, caveman=caveman, caveman_mode=caveman_mode))
 
     graph.set_entry_point("perception")

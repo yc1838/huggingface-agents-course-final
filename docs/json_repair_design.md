@@ -41,6 +41,7 @@ Four layers, each only triggered when the previous one fails:
 | Empty string or whitespace-only | **Empty** | Raise `EmptyResponseError` → state machine retries upstream node with "you produced nothing — rephrase" hint |
 | No `{` and no `[` anywhere in text | **Empty** (prose refusal) | Same as above — **never** send to fixer (it will hallucinate fields) |
 | Contains `{` / `[` but `json.loads` + Pydantic fails | **Malformed** | Send to Fixer Agent |
+| LLM returns `[]` but schema expects `{"plan": ...}` | **Schema Mismatch (List)** | **Coerce**: wrap list in common field name (e.g. `plan`, `steps`, `result`) and re-validate locally |
 | Fixer produces prose (no `{` / `[`) | **Malformed** (fixer degenerate) | Retry with error fed back; after budget → `UnsalvageableJsonError` |
 | Fixer produces valid JSON but fails Pydantic | **Schema drift** | Retry with validation error fed back; after budget → `UnsalvageableJsonError` |
 

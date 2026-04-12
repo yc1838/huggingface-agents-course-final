@@ -11,6 +11,8 @@ from pydantic import BaseModel
 T = TypeVar("T", bound=BaseModel)
 log = logging.getLogger(__name__)
 
+from gaia_agent.llm_utils import extract_text
+
 # Ensure logs directory exists for telemetry
 os.makedirs("logs", exist_ok=True)
 
@@ -29,6 +31,10 @@ def extract_raw_json_string(text: str) -> str | None:
     then performs a balanced-bracket walk to find the matching close.
     Returns None if no opening bracket exists.
     """
+    # Ensure we are working with a string
+    if not isinstance(text, str):
+        text = extract_text(text)
+    
     if not text:
         return None
         
@@ -104,9 +110,8 @@ def safe_structured_call(
     from langchain_core.utils.json import parse_json_markdown
 
     response = model.invoke(messages)
-    raw_text = getattr(response, "content", str(response))
-    if not isinstance(raw_text, str):
-        raw_text = str(raw_text)
+    # CRITICAL FIX: Always extract text to handle list-type contents
+    raw_text = extract_text(getattr(response, "content", response))
 
     log.debug("[%s] trying to parse response (len=%d)", node_name, len(raw_text))
 
@@ -124,11 +129,24 @@ def safe_structured_call(
         if isinstance(parsed, dict):
             return target_schema.model_validate(parsed)
         elif isinstance(parsed, list):
-            # If the schema itself is a list-based model or we need to wrap it
-            # depends on the specific target_schema requirements.
-            # Most GAIA nodes expect a dict with a 'plan' or similar key.
-            # We try to validate directly; Pydantic handles list models too.
-            return target_schema.model_validate(parsed)
+            # Step 4a: Handle empty list - usually a soft failure sign
+            if len(parsed) == 0:
+                raise Exception("Model returned empty list []. Content is required.")
+
+            # Try to validate directly; Pydantic handles list models too.
+            try:
+                return target_schema.model_validate(parsed)
+            except Exception:
+                # If direct validation fails, assume it's a list that needs wrapping.
+                # Heuristic: wrap in 'plan', 'steps', or 'result' based on common GAIA schema fields.
+                fields = list(target_schema.model_fields.keys())
+                if len(fields) == 1:
+                    return target_schema.model_validate({fields[0]: parsed})
+                # Fallback to specific common field names if multi-field
+                for common_field in ["plan", "steps", "result"]:
+                    if common_field in fields:
+                        return target_schema.model_validate({common_field: parsed})
+                raise # Re-raise if no obvious wrapper field exists
     except Exception as e:
         first_error = str(e)
         log.warning("[%s] initial parse/validate failed: %s", node_name, first_error)
@@ -146,17 +164,23 @@ def safe_structured_call(
     for attempt in range(max_local_repairs):
         log.info("[%s] invoking JSON fixer (attempt %d/%d)", node_name, attempt + 1, max_local_repairs)
         fixer_prompt = (
-            f"You are a JSON syntax fixer. Your task is to fix syntax errors in the provided JSON string "
-            f"so it strictly follows the target schema. Do NOT change values, facts, or reasoning. "
-            f"Only fix formatting (quotes, brackets, commas, etc.).\n\n"
-            f"Return ONLY the valid JSON block. No other text.\n\n"
+            f"You are a STRICT JSON syntax fixer. Your task is to fix syntax errors in the provided JSON string "
+            f"so it strictly follows the target schema. Do NOT change values, facts, or reasoning.\n"
+            f"CRITICAL: Return ONLY the valid JSON block. NO PROSE. NO EXPLANATIONS. NO REFUSALS.\n\n"
             f"Target schema:\n{schema_str}\n\n"
             f"Previous error: {prev_error}\n"
             f"Bad JSON:\n{bad_output}\n"
         )
         try:
             fix_response = fixer.invoke(fixer_prompt)
-            fix_text = getattr(fix_response, "content", str(fix_response))
+            fix_text = extract_text(getattr(fix_response, "content", fix_response))
+            
+            # GUARD: Detect if the fixer is "yapping" instead of fixing
+            if any(indicator in fix_text.lower() for indicator in ["i cannot", "i apologize", "input should be", "validation error", "is not a valid", "expected a"]):
+                log.warning("[%s] fixer returned prose/refusal instead of JSON. Skipping this attempt.", node_name)
+                prev_error = "Fixer returned prose/explanation instead of raw JSON"
+                continue
+
             fix_json = extract_raw_json_string(fix_text)
             
             if fix_json is None:

@@ -22,6 +22,7 @@ def make_formatter_node(model, caveman: bool = False, caveman_mode: str = "full"
             return {"final_answer": ""}
         
         try:
+            from gaia_agent.llm_utils import extract_text
             formatter_prompt = apply_caveman(FORMATTER_SYSTEM, caveman, caveman_mode)
             
             response = model.invoke([
@@ -29,7 +30,10 @@ def make_formatter_node(model, caveman: bool = False, caveman_mode: str = "full"
                 {"role": "user", "content": f"Format this answer precisely: {raw}"}
             ])
             # Handle both string content and message objects
-            final_answer = getattr(response, "content", str(response)).strip()
+            final_answer = extract_text(getattr(response, "content", response)).strip()
+            # Remove markdown backticks if they are wrapping the answer
+            final_answer = final_answer.replace("`", "").strip()
+            
             # Ensure we didn't get a hallucinated long story, if so, fallback
             if len(final_answer) > len(raw) + 10:
                  final_answer = _normalize_regex(raw)

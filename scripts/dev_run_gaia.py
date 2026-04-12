@@ -54,6 +54,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Delete existing checkpoints for selected tasks before running")
     parser.add_argument("--cavemen", action="store_true", help="Enable Caveman Mode (ultra-terse communication)")
     parser.add_argument("--caveman-mode", type=str, default="full", choices=["lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra"], help="Caveman Mode intensity level")
+    parser.add_argument("--gemma4", action=argparse.BooleanOptionalAction, default=True, help="Use gemma-4-31b-it for all model tiers (completely free on Gemini API). Default is True.")
     args = parser.parse_args()
 
     log_level = logging.DEBUG if args.verbose else logging.INFO
@@ -88,6 +89,22 @@ def main() -> None:
     # Manual override for the user to be absolutely sure
     if args.local:
         cfg = Config.from_env()
+
+    # High-Performance Free Testing Shortcut
+    if args.gemma4:
+        import dataclasses
+        print("\n" + "!"*80)
+        print("!!! OVERRIDING ALL TIERED MODELS TO gemma-4-31b-it (Google Provider) !!!".center(80))
+        print("!"*80 + "\n")
+        cfg = dataclasses.replace(
+            cfg,
+            cheap_provider="google",
+            cheap_model="gemma-4-31b-it",
+            strong_provider="google",
+            strong_model="gemma-4-31b-it",
+            extra_strong_provider="google",
+            extra_strong_model="gemma-4-31b-it"
+        )
 
     # Apply Caveman flags
     import dataclasses

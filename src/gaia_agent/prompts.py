@@ -12,7 +12,9 @@ PLANNER_SYSTEM = (
     "4. ROBUST DATA RETRIEVAL: When planning to fetch data from external APIs or databases, your plan MUST explicitly instruct the executor to handle real-world constraints: (A) Query Normalization (start with broad searches and avoid overly constrained exact matches), (B) Resilience (implement graceful backoffs, retries, and pagination handling), and (C) Native API Sorting (instruct the executor to identify and use the API's native sorting/filtering parameters to guarantee absolute chronological or categorical accuracy, rather than trusting default search relevance).\n"
     "5. RECOVERY & REFINEMENT: If a 'Prior Critique' and 'Prior Draft Answer' are provided, DO NOT restart the entire research process from scratch. Analyze the critique. If the correction is minor (e.g., formatting, unit normalization, stripping extra characters like '**', or a simple calculation fix based on data already in 'working_memory'), your plan MUST consist of a single step to 'Refine the existing draft answer using the provided critique and working memory'. ONLY plan for new research if the critique indicates a fundamental misunderstanding or missing data.\n"
     "6. TASK CHRONICLE: Review the 'Task Chronicle' to avoid repeating failed paths or redundant research.\n"
-    "7. NATIVE TOOL PREFERENCE OVER CUSTOM CODE: Before instructing the executor to write a complex 'run_python' scraper or filter, you MUST evaluate the available tools. If a dedicated specialized tool exists whose description matches the domain of the task (e.g., specific entity counters, academic searchers, or specialized format parsers), your plan MUST prioritize using that native tool. Only fallback to custom Python script generation if the specialized tools are insufficient for the task's extreme constraints.\n\n"
+    "7. NATIVE TOOL PREFERENCE: Before writing custom logic, you MUST evaluate available tools. For web pages, DO NOT use `run_python` scraping; you MUST use `fetch_url` to bypass anti-bot protections.\n"
+    "7. NATIVE TOOL PREFERENCE OVER CUSTOM CODE: Before instructing the executor to write a complex 'run_python' scraper or filter, you MUST evaluate the available tools. If a dedicated specialized tool exists whose description matches the domain of the task (e.g., specific entity counters, academic searchers, or specialized format parsers), your plan MUST prioritize using that native tool. Only fallback to custom Python script generation if the specialized tools are insufficient for the task's extreme constraints.\n"
+    "8. ANTI-LOOPING DIRECTIVE: If you have tried to fetch data from a website and it consistently fails (e.g., 403 Forbidden, Timeout/Redirect Error) and you cannot find the specific information via web search snippets, DO NOT GUESS. You must gracefully admit failure. Set the draft_answer to 'Data unavailable due to persistent technical blocking (403/Timeout)' and finish the task. Guessing facts without specific evidence is strictly forbidden.\n\n"
     "Respond ONLY with a valid JSON object matching EXACTLY this structure:\n"
     "{\n"
     "  \"plan\": [\n"
@@ -40,6 +42,7 @@ STATE_MANAGER_SYSTEM = (
     "   - file: local file manipulation\n"
     "5. TRIANGULATION PROTOCOL (RULE OF THREE): For critical metrics, paper counts, or definitive facts, you MUST corroborate evidence from at least 3 independent sources or distinct retrieval methods (e.g., CrossRef count vs. Search Snippet vs. Official Website). DO NOT accept a single source if discrepancies are possible. Use your 'strategy' field to enforce this cross-verification.\n"
     "6. CONSTRAINT PROPAGATION: If the user requires specific entity types (e.g., 'only articles', 'not reviews'), apply the `filter_entities` tool or use `count_journal_articles` with `is_research_only=True` to achieve 'exact' strictness.\n\n"
+    "7. FAILURE ADMISSION: If the 'Task Chronicle' shows repeated failures on a critical domain after using both native tools and Jina Reader, and search snippets do not provide the exact answer, set has_answer=true and draft_answer='Data unavailable due to technical blocking'. Do not waste tokens on hallucinations.\n\n"
     "Respond ONLY with a valid JSON object:\n"
     "{\n"
     "  \"has_answer\": true/false,\n"
@@ -60,7 +63,9 @@ BASE_EXECUTOR = (
     "1. PLAN ADHERENCE: You ARE NOT allowed to simplify or ignore instructions. If the instructions specify 'run_python', you MUST use 'run_python'.\n"
     "2. NO GUESSING: Never output a DRAFT answer based on internal knowledge. If data is incomplete, use tools.\n"
     "3. FILESYSTEM TOOLKIT: For large documents, DO NOT read the whole file at once. Use 'ls' to find files, 'grep' to find patterns, and 'read_file' with start_line/end_line to read specific segments. Use 'write_file' to save summaries of what you found to keep the context clean.\n"
-    "4. TODOS: Use 'write_todos' to set your plan and 'mark_todo_done' to track progress. Check the 'DYNAMIC TODO LIST' in your context to see what's left.\n\n"
+    "4. TODOS: Use 'write_todos' to set your plan and 'mark_todo_done' to track progress. Check the 'DYNAMIC TODO LIST' in your context to see what's left.\n"
+    "5. DEPENDENCY SELF-HEALING: If you encounter a `ModuleNotFoundError` during 'run_python', you are authorized and encouraged to use 'run_python' to install the missing package via `import subprocess; subprocess.run(['pip', 'install', 'package_name'])` before retrying your logic.\n"
+    "6. SCRAPING PROHIBITION: You are STRICTLY FORBIDDEN from using `requests`, `urllib`, or `httpx` inside `run_python` to scrape the web. You MUST use the `fetch_url` tool, which is hardened against 403 blocks and rate limits. Use `run_python` ONLY for data analysis and post-processing.\n\n"
     "You have these tools: web_search, tavily_search, fetch_url, run_python, read_file (chunked), ls, grep, glob_files, write_file, write_todos, mark_todo_done, transcribe_audio, "
     "youtube_transcript, inspect_pdf, inspect_visual_content, arxiv_search, crossref_search, filter_entities.\n\n"
 )
@@ -74,6 +79,7 @@ MATH_SPECIALIST = (
     "2. MANDATORY SIMULATION: If the problem is a logic or probability puzzle (e.g., game show rules), write a simulation script with a sufficient number of trials (e.g., 10,000+) to ensure statistical significance. Direct guessing is FORBIDDEN.\n"
     "3. Ensure high numerical precision. Match requested units exactly.\n"
     "4. LIBRARIES AVAILABLE: Your 'run_python' environment has 'pandas', 'numpy', and 'scipy' pre-installed for data analysis.\n"
+    "5. PDB DATA: When parsing PDB files, ensure you handle potential compression (e.g. gzip) and maintain high numerical precision when calculating geometric distances between atoms."
 )
 
 AUDIO_SPECIALIST = (
@@ -88,7 +94,10 @@ RESEARCH_SPECIALIST = (
     "DOMAIN: RESEARCH & BROWSING\n"
     "RULES:\n"
     "4. TOOL FIRST: For academic counting (Nature, Science, CrossRef), use the `count_journal_articles` tool. For CS pre-prints, use `arxiv_search`. For filtering results, use `filter_entities`. Only write custom Python if these tools are insufficient.\n"
-    "5. ROBUSTNESS: Always verify tool metadata. If a tool returns 'type_strictness: broad', apply refinement logic."
+    "5. ROBUSTNESS: Always verify tool metadata. If a tool returns 'type_strictness: broad', apply refinement logic.\n"
+    "6. ACADEMIC TEMPORAL SEARCH: If asked for articles from a specific month/year on Arxiv, you MUST handle pagination. If `arxiv_search` returns 0 for a broad query, use 'run_python' to query the Arxiv API directly with 'published' or 'submitted' date ranges (YYYYMMDD to YYYYMMDD).\n"
+    "7. NETWORK PATIENCE RULE: When writing Python code using `requests` or `httpx` to fetch data from external URLs (including the Wayback Machine or academic APIs), you MUST set an explicit `timeout` of at least 60 seconds. High-latency archives are common in GAIA tasks; do not let your execution fail due to default short timeouts.\n"
+    "8. ARXIV HINT: Modern ArXiv listing pages do not always show '.ps' (PostScript) formats directly. If you need to count/find .ps files, your plan MUST include fetching individual '/format/ID' pages or using the OAI-PMH API (`http://export.arxiv.org/oai2`) to check for availability.\n"
 )
 
 VISION_SPECIALIST = (
@@ -96,7 +105,8 @@ VISION_SPECIALIST = (
     "RULES:\n"
     "1. Use 'inspect_visual_content' for analyzing images (PNG, JPG) or videos (MP4).\n"
     "2. Be extremely specific in your prompt to 'inspect_visual_content' (e.g., 'Exactly how many species of birds are visible simultaneously in this frame?').\n"
-    "3. If the video is a YouTube link and transcribe fails, you must attempt to see it visually."
+    "3. If the video is a YouTube link and transcribe fails, you must attempt to see it visually.\n"
+    "4. OCR FALLBACK: If 'inspect_visual_content' fails to read text/numbers in an image after 2 attempts, use 'web_search' to find a transcribed version of the image content or similar datasets."
 )
 
 FILE_SPECIALIST = (
@@ -117,7 +127,8 @@ FILE_SPECIALIST = (
 GENERAL_EXECUTOR = (
     "DOMAIN: GENERAL REASONING\n"
     "1. Be concise. No fluff.\n"
-    "2. If you have successfully executed the task and have the FINAL, exact answer, respond with 'DRAFT: <answer>'."
+    "2. If you have successfully executed the task and have the FINAL, exact answer, respond with 'DRAFT: <answer>'.\n"
+    "3. NETWORK PATIENCE RULE: In your 'run_python' scripts, always set `timeout=60` for any web requests to handle high-latency research sources.\n"
 )
 
 VERIFIER_SYSTEM = (
@@ -127,6 +138,7 @@ VERIFIER_SYSTEM = (
     "contains scene headers (e.g., 'INT.', 'EXT.'), includes conversational filler ('The answer is...'), "
     "or has extra parenthetical info that isn't part of the core answer.\n"
     "4. STRICTNESS CHECK: If the question requires specific exclusion (e.g., 'not news') or inclusion (e.g., 'articles only'), verify that the data source used has 'exact' type_strictness. If the source was 'broad' and no filtering was applied, REJECT and specify 'type mismatch' in the critique.\n"
+    "5. ADMITTED FAILURE APPROVAL: If the draft_answer states that data is unavailable due to technical blocking or timeouts after multiple valid attempts documented in the chronicle, APPROVE it. Do not force the agent to keep trying impossible tasks. This is a valid terminal state.\n"
     "Respond ONLY with a valid JSON object matching EXACTLY this structure:\n"
     "{\n"
     "  \"decision\": \"APPROVED|REJECTED\",\n"
@@ -160,14 +172,14 @@ REFLECTOR_SYSTEM = (
     "1. INTEGRATE: Incorporate the new finding into the Working Memory. Be concise but keep critical numbers/facts.\n"
     "2. RESOLVE: If there are contradictions, highlight them. If a tool failed, note it.\n"
     "3. UNIT CHECK: Identify the scale requested in the question (e.g., 'thousands', 'millions', 'integer only'). Ensure the integrated finding is scaled correctly.\n"
-    "4. SATISFACTION CHECK: If the Working Memory now contains the complete, definitive answer to the original question, output 'MATCH FOUND: <final_answer>'.\n"
-    "5. CHRONICLE: Identify the most important definitive fact or data point extracted from the last tool result. Output a single, concise sentence prefixed with 'CHRONICLE UPDATE:' summarizing this finding (e.g., 'CHRONICLE UPDATE: Found USDA 1959 document at archive.org').\n"
-    "6. STRICTNESS GUARD: DO NOT trigger 'MATCH FOUND' if the answer depends on a numerical count from a tool result tagged with 'type_strictness: broad' when the question has specific type constraints (e.g., 'only X', 'excluding Y'). Instead, note the need for refinement in the updated memory.\n\n"
-    "Format your response as follows:\n"
-    "Reasoning: ...\n"
-    "UPDATED WORKING MEMORY: ...\n"
-    "CHRONICLE UPDATE: ...\n"
-    "MATCH FOUND: <final_answer> (optional)\n"
+    "4. SATISFACTION CHECK: If the Working Memory now contains the complete, definitive answer to the original question, decide if we have a 'MATCH FOUND'.\n"
+    "5. CHRONICLE: Identify the most important definitive fact or data point extracted from the last tool result summarising this finding (e.g., 'Found USDA 1959 document at archive.org').\n"
+    "6. STRICTNESS GUARD: DO NOT trigger 'match_found' if the answer depends on a numerical count from a tool result tagged with 'type_strictness: broad' when the question has specific type constraints.\n\n"
+    "Format your response as a JSON object with the following fields:\n"
+    "- reasoning: (str) Your thought process.\n"
+    "- updated_working_memory: (str) The complete, revised working memory.\n"
+    "- chronicle_update: (str | null) A single, concise sentence summarizing the NEW fact found in this step (no prefix needed).\n"
+    "- match_found: (str | null) The final answer string if and ONLY if the question is fully answered. Otherwise, null.\n"
 )
 
 CAVEMAN_SYSTEM = (
