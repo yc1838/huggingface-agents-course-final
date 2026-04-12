@@ -189,6 +189,11 @@ def safe_structured_call(
                 continue
                 
             parsed = parse_json_markdown(fix_json)
+            
+            # Step 5a: Also reject empty lists from the fixer!
+            if isinstance(parsed, list) and len(parsed) == 0:
+                raise Exception("Fixer returned empty list []. Non-empty content is REQUIRED.")
+                
             result = target_schema.model_validate(parsed)
             
             log.info("[%s] JSON repair successful on attempt %d", node_name, attempt + 1)
@@ -197,7 +202,10 @@ def safe_structured_call(
         except Exception as e:
             prev_error = str(e)
             bad_output = fix_json if 'fix_json' in locals() and fix_json else fix_text
-            log.warning("[%s] repair attempt %d failed: %s", node_name, attempt + 1, prev_error)
+            # Log snippet of what the model actually said to help the user debug
+            snippet = bad_output[:200].replace('\n', ' ')
+            log.warning("[%s] repair attempt %d failed: %s. Raw snippet: %r", 
+                        node_name, attempt + 1, prev_error, snippet)
 
     # Step 6: Fail
     _log_repair(node_name, target_schema.__name__, raw_text, bad_output, "failure", max_local_repairs)

@@ -23,3 +23,4 @@ python-dotenv>=1.0.0
 pytest
 beautifulsoup4
 fal-client
+tenacity

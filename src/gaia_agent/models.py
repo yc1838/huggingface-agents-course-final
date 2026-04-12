@@ -11,7 +11,42 @@ from langchain_ollama import ChatOllama
 from langchain_openai import ChatOpenAI
 
 import logging
+from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type, Retrying, AsyncRetrying
 from gaia_agent.config import Config
+
+# Identify retryable exceptions (429s) across providers
+RETRY_EXCEPTIONS = []
+try:
+    from google.api_core.exceptions import ResourceExhausted
+    RETRY_EXCEPTIONS.append(ResourceExhausted)
+except ImportError:
+    pass
+
+try:
+    from anthropic import RateLimitError as AnthropicRateLimitError
+    RETRY_EXCEPTIONS.append(AnthropicRateLimitError)
+except ImportError:
+    pass
+
+try:
+    from openai import RateLimitError as OpenAIRateLimitError
+    RETRY_EXCEPTIONS.append(OpenAIRateLimitError)
+except ImportError:
+    pass
+
+RETRY_EXCEPTIONS = tuple(RETRY_EXCEPTIONS)
+
+# Shared retry configuration for context managers
+_RETRY_PARAMS = dict(
+    retry=retry_if_exception_type(RETRY_EXCEPTIONS) if RETRY_EXCEPTIONS else lambda e: False,
+    wait=wait_exponential(multiplier=2, min=4, max=60),
+    stop=stop_after_attempt(5),
+    before_sleep=lambda retry_state: log.warning(
+        f"LLM Rate Limit (429) hit. Retrying in {retry_state.next_action.sleep}s... "
+        f"(Attempt {retry_state.attempt_number}/5)"
+    ),
+    reraise=True
+)
 
 try:
     from langchain_community.cache import SQLiteCache
@@ -98,13 +133,58 @@ class _BoundNoThinkWrapper:
         return getattr(self._bound, name)
 
 
+class _RetryWrapper(BaseChatModel):
+    """Wraps any BaseChatModel to apply exponential backoff on 429 errors."""
+
+    inner: BaseChatModel
+
+    @property
+    def _llm_type(self) -> str:
+        return f"retry-{self.inner._llm_type}"
+
+    def _generate(self, *args, **kwargs):
+        for attempt in Retrying(**_RETRY_PARAMS):
+            with attempt:
+                return self.inner._generate(*args, **kwargs)
+
+    async def _agenerate(self, *args, **kwargs):
+        async for attempt in AsyncRetrying(**_RETRY_PARAMS):
+            with attempt:
+                return await self.inner._agenerate(*args, **kwargs)
+
+    def bind_tools(self, tools: Any, **kwargs: Any):
+        bound = self.inner.bind_tools(tools, **kwargs)
+        # We need to wrap the resulting bound tool caller's invoke method too
+        return _BoundRetryWrapper(bound=bound)
+
+
+class _BoundRetryWrapper:
+    """Wraps a tool-bound model to apply retry logic to .invoke()."""
+
+    def __init__(self, bound):
+        self._bound = bound
+
+    def invoke(self, *args, **kwargs):
+        for attempt in Retrying(**_RETRY_PARAMS):
+            with attempt:
+                return self._bound.invoke(*args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._bound, name)
+
+
 def _build(provider: str, model: str, cfg: Config) -> BaseChatModel:
     log.info("Building model for provider=%r, model=%r", provider, model)
     max_tokens = cfg.max_tokens
+    
+    # helper to wrap final model
+    def _wrap(m):
+        return _RetryWrapper(inner=m)
+
     if provider == "ollama":
-        return ChatOllama(model=model, num_predict=max_tokens)
+        return _wrap(ChatOllama(model=model, num_predict=max_tokens))
     if provider == "anthropic":
-        return ChatAnthropic(model=model, api_key=cfg.anthropic_api_key, max_tokens=max_tokens)
+        return _wrap(ChatAnthropic(model=model, api_key=cfg.anthropic_api_key, max_tokens=max_tokens))
     if provider == "google":
         from langchain_google_genai import HarmBlockThreshold, HarmCategory
         
@@ -115,17 +195,17 @@ def _build(provider: str, model: str, cfg: Config) -> BaseChatModel:
             HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
             HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
         }
-        return ChatGoogleGenerativeAI(
+        return _wrap(ChatGoogleGenerativeAI(
             model=model, 
             google_api_key=cfg.google_api_key, 
             max_output_tokens=max_tokens,
             safety_settings=safety_settings
-        )
+        ))
     if provider == "huggingface":
         endpoint = HuggingFaceEndpoint(
             repo_id=model, huggingfacehub_api_token=cfg.huggingface_api_key, max_new_tokens=max_tokens
         )
-        return ChatHuggingFace(llm=endpoint)
+        return _wrap(ChatHuggingFace(llm=endpoint))
     if provider == "lmstudio":
         # LM Studio exposes an OpenAI-compatible API.
         inner = ChatOpenAI(
@@ -136,7 +216,9 @@ def _build(provider: str, model: str, cfg: Config) -> BaseChatModel:
             max_tokens=max_tokens,
         )
         # Wrap with /no_think injection to disable Qwen3 chain-of-thought mode
-        return _NoThinkWrapper(inner=inner, model_name=model)
+        # Then wrap the result with retry logic
+        wrapped = _NoThinkWrapper(inner=inner, model_name=model)
+        return _wrap(wrapped)
     raise ValueError(f"Unknown provider: {provider}")
 
 

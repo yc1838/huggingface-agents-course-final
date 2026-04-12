@@ -54,7 +54,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Delete existing checkpoints for selected tasks before running")
     parser.add_argument("--cavemen", action="store_true", help="Enable Caveman Mode (ultra-terse communication)")
     parser.add_argument("--caveman-mode", type=str, default="full", choices=["lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra"], help="Caveman Mode intensity level")
-    parser.add_argument("--gemma4", action=argparse.BooleanOptionalAction, default=True, help="Use gemma-4-31b-it for all model tiers (completely free on Gemini API). Default is True.")
+    parser.add_argument("--gemma4", action=argparse.BooleanOptionalAction, default=False, help="Use gemma-4-31b-it for all model tiers (completely free on Gemini API). Default is False.")
     args = parser.parse_args()
 
     log_level = logging.DEBUG if args.verbose else logging.INFO
@@ -91,11 +91,15 @@ def main() -> None:
         cfg = Config.from_env()
 
     # High-Performance Free Testing Shortcut
-    if args.gemma4:
+    # Enable if CLI flag is set OR if USE_GEMMA_4 environment variable is TRUE
+    use_gemma4 = args.gemma4 or os.getenv("USE_GEMMA_4", "false").lower() == "true"
+    
+    if use_gemma4:
         import dataclasses
-        print("\n" + "!"*80)
-        print("!!! OVERRIDING ALL TIERED MODELS TO gemma-4-31b-it (Google Provider) !!!".center(80))
-        print("!"*80 + "\n")
+        source = "ENV: USE_GEMMA_4=TRUE" if os.getenv("USE_GEMMA_4", "false").lower() == "true" else "CLI: --gemma4"
+        print("\n" + "!"*80, flush=True)
+        print(f"!!! OVERRIDING ALL TIERED MODELS TO gemma-4-31b-it ({source}) !!!".center(80), flush=True)
+        print("!"*80 + "\n", flush=True)
         cfg = dataclasses.replace(
             cfg,
             cheap_provider="google",
