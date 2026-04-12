@@ -54,7 +54,7 @@ def main() -> None:
     parser.add_argument("--force", action="store_true", help="Delete existing checkpoints for selected tasks before running")
     parser.add_argument("--cavemen", action="store_true", help="Enable Caveman Mode (ultra-terse communication)")
     parser.add_argument("--caveman-mode", type=str, default="full", choices=["lite", "full", "ultra", "wenyan-lite", "wenyan-full", "wenyan-ultra"], help="Caveman Mode intensity level")
-    parser.add_argument("--gemma4", action=argparse.BooleanOptionalAction, default=False, help="Use gemma-4-31b-it for all model tiers (completely free on Gemini API). Default is False.")
+    parser.add_argument("--gemma4", action=argparse.BooleanOptionalAction, default=None, help="Use gemma-4-31b-it for all model tiers (completely free on Gemini API). CLI flag overrides environment variables.")
     args = parser.parse_args()
 
     log_level = logging.DEBUG if args.verbose else logging.INFO
@@ -91,12 +91,17 @@ def main() -> None:
         cfg = Config.from_env()
 
     # High-Performance Free Testing Shortcut
-    # Enable if CLI flag is set OR if USE_GEMMA_4 environment variable is TRUE
-    use_gemma4 = args.gemma4 or os.getenv("USE_GEMMA_4", "false").lower() == "true"
-    
+    # Hierarchy: CLI Flag (Explicit) > Environment Variable > Default (False)
+    if args.gemma4 is not None:
+        use_gemma4 = args.gemma4
+        source = "CLI: --gemma4" if args.gemma4 else "CLI: --no-gemma4"
+    else:
+        use_gemma4 = os.getenv("USE_GEMMA_4", "false").lower() == "true"
+        source = "ENV: USE_GEMMA_4=TRUE" if use_gemma4 else None
+
     if use_gemma4:
         import dataclasses
-        source = "ENV: USE_GEMMA_4=TRUE" if os.getenv("USE_GEMMA_4", "false").lower() == "true" else "CLI: --gemma4"
+        banner_source = source or "DEFAULT: OFF"
         print("\n" + "!"*80, flush=True)
         print(f"!!! OVERRIDING ALL TIERED MODELS TO gemma-4-31b-it ({source}) !!!".center(80), flush=True)
         print("!"*80 + "\n", flush=True)
