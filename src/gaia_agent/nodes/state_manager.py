@@ -4,8 +4,6 @@ import logging
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from gaia_agent.json_utils import extract_json
-from gaia_agent.llm_utils import extract_text
 from gaia_agent.state import AgentState
 
 log = logging.getLogger(__name__)

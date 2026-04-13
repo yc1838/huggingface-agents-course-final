@@ -23,6 +23,11 @@ def test_config_from_env_uses_defaults(monkeypatch):
     assert config.cheap_model == "gemma3:4b"
     assert config.strong_provider == "anthropic"
     assert config.strong_model == "claude-sonnet-4-6"
+    assert config.extra_strong_provider == "anthropic"
+    assert config.extra_strong_model == "claude-sonnet-4-6"
+    assert config.vision_provider == "fal"
+    assert config.vision_model == "gemini-3-flash-preview"
+    assert config.fal_vision_api_key == ""
     assert config.api_url == "https://agents-course-unit4-scoring.hf.space"
     assert config.checkpoint_dir == ".checkpoints"
     assert config.whisper_model == "base"
@@ -39,6 +44,11 @@ def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
     monkeypatch.setenv("GAIA_CHEAP_MODEL", "haiku")
     monkeypatch.setenv("GAIA_STRONG_PROVIDER", "google")
     monkeypatch.setenv("GAIA_STRONG_MODEL", "gemini-pro")
+    monkeypatch.setenv("GAIA_EXTRA_STRONG_PROVIDER", "google")
+    monkeypatch.setenv("GAIA_EXTRA_STRONG_MODEL", "gemini-pro-1.5")
+    monkeypatch.setenv("GAIA_VISION_PROVIDER", "google")
+    monkeypatch.setenv("GAIA_VISION_MODEL", "gemini-pro-vision")
+    monkeypatch.setenv("GAIA_FAL_VISION_API_KEY", "fal-123")
     monkeypatch.setenv("GAIA_API_URL", "https://example.test")
     monkeypatch.setenv("GAIA_CHECKPOINT_DIR", "/tmp/checkpoints")
     monkeypatch.setenv("GAIA_ANTHROPIC_API_KEY", "anth-key")
@@ -56,6 +66,11 @@ def test_config_from_env_honors_gaia_prefixed_overrides(monkeypatch):
         cheap_model="haiku",
         strong_provider="google",
         strong_model="gemini-pro",
+        extra_strong_provider="google",
+        extra_strong_model="gemini-pro-1.5",
+        vision_provider="google",
+        vision_model="gemini-pro-vision",
+        fal_vision_api_key="fal-123",
         api_url="https://example.test",
         checkpoint_dir="/tmp/checkpoints",
         whisper_model="small",

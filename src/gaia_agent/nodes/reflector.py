@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
-import re
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
-from gaia_agent.llm_utils import extract_text
 from gaia_agent.prompts import REFLECTOR_SYSTEM, apply_caveman
 from gaia_agent.state import AgentState
 
@@ -79,7 +77,5 @@ def make_reflector_node(model, cheap_model=None, caveman: bool = False, caveman_
             return {
                 "json_repair_retries": state["json_repair_retries"] + 1,
             }
-
-    return reflector
 
     return reflector

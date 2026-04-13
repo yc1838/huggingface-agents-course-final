@@ -67,21 +67,25 @@ def make_verifier_node(model, cheap_model=None, caveman: bool = False, caveman_m
                     "json_repair_retries": state["json_repair_retries"],
                 }
 
+            next_retries = state["retries"] + 1
+            preserve_draft = next_retries > MAX_RETRIES
             return {
                 "critique": critique or "Answer rejected without explanation.",
-                "draft_answer": None,
+                "draft_answer": state["draft_answer"] if preserve_draft else None,
                 "final_answer": None,
-                "retries": state["retries"] + 1,
+                "retries": next_retries,
                 "json_repair_retries": state["json_repair_retries"],
             }
-            
+
         except (EmptyResponseError, UnsalvageableJsonError) as e:
             log.warning("[verifier] structured call failed: %s. Defaulting to REJECTED", e)
+            next_retries = state["retries"] + 1
+            preserve_draft = next_retries > MAX_RETRIES
             return {
                 "critique": f"Verifier crash: {str(e)}",
-                "draft_answer": None,
+                "draft_answer": state["draft_answer"] if preserve_draft else None,
                 "final_answer": None,
-                "retries": state["retries"] + 1,
+                "retries": next_retries,
                 "json_repair_retries": state["json_repair_retries"] + 1,
             }
 

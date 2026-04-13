@@ -53,8 +53,6 @@ STATE_MANAGER_SYSTEM = (
     "CHRONICLE RULE: Use the 'Task Chronicle' to avoid repeating failed paths or redundant research.\n"
 )
 
-ORCHESTRATOR_SYSTEM = STATE_MANAGER_SYSTEM # For backward compatibility
-
 BASE_EXECUTOR = (
     "You are the execution component for a GAIA-style agent. "
     "Your goal is to execute the current step of the plan/todos. "
@@ -96,7 +94,7 @@ RESEARCH_SPECIALIST = (
     "4. TOOL FIRST: For academic counting (Nature, Science, CrossRef), use the `count_journal_articles` tool. For CS pre-prints, use `arxiv_search`. For filtering results, use `filter_entities`. Only write custom Python if these tools are insufficient.\n"
     "5. ROBUSTNESS: Always verify tool metadata. If a tool returns 'type_strictness: broad', apply refinement logic.\n"
     "6. ACADEMIC TEMPORAL SEARCH: If asked for articles from a specific month/year on Arxiv, you MUST handle pagination. If `arxiv_search` returns 0 for a broad query, use 'run_python' to query the Arxiv API directly with 'published' or 'submitted' date ranges (YYYYMMDD to YYYYMMDD).\n"
-    "7. NETWORK PATIENCE RULE: When writing Python code using `requests` or `httpx` to fetch data from external URLs (including the Wayback Machine or academic APIs), you MUST set an explicit `timeout` of at least 60 seconds. High-latency archives are common in GAIA tasks; do not let your execution fail due to default short timeouts.\n"
+    "7. NETWORK PATIENCE RULE (API EXCEPTION): When the plan explicitly requires direct API calls that `fetch_url` cannot handle (e.g., Wayback Machine CDX API, Arxiv OAI-PMH, CrossRef REST API), you may use `requests`/`httpx` inside `run_python` as an exception to the Scraping Prohibition. For these calls, you MUST include a `User-Agent` header (e.g., 'User-Agent': 'Mozilla/5.0 GaiaAgent/1.0') and set `timeout=60` to handle high-latency academic sources.\n"
     "8. ARXIV HINT: Modern ArXiv listing pages do not always show '.ps' (PostScript) formats directly. If you need to count/find .ps files, your plan MUST include fetching individual '/format/ID' pages or using the OAI-PMH API (`http://export.arxiv.org/oai2`) to check for availability.\n"
 )
 
@@ -128,7 +126,7 @@ GENERAL_EXECUTOR = (
     "DOMAIN: GENERAL REASONING\n"
     "1. Be concise. No fluff.\n"
     "2. If you have successfully executed the task and have the FINAL, exact answer, respond with 'DRAFT: <answer>'.\n"
-    "3. NETWORK PATIENCE RULE: In your 'run_python' scripts, always set `timeout=60` for any web requests to handle high-latency research sources.\n"
+    "3. NETWORK PATIENCE RULE (API EXCEPTION): If your `run_python` code calls a non-web-scraping API endpoint (e.g., academic data APIs), set `timeout=60` and include a `User-Agent` header to avoid being blocked.\n"
 )
 
 VERIFIER_SYSTEM = (

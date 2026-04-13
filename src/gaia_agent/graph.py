@@ -15,7 +15,6 @@ from gaia_agent.state import AgentState
 def build_graph(
     perception_node,
     planner_model,
-    orchestrator_model,
     strong_model,
     cheap_model,
     verifier_model,

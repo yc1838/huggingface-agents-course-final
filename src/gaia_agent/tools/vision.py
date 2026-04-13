@@ -28,7 +28,7 @@ def inspect_visual_content(file_path_or_url: str, prompt: str, cfg: Config) -> s
     target_model = MODEL_MAP.get(requested_model, requested_model)
     requested_provider = cfg.vision_provider
 
-    def _call_vision(model_name: str, provider: str) -> str:
+    def _call_vision(model_name: str, provider: str, b64_data: str, mime_type: str, content: list) -> str:
         # SMART PROVISION: If model name looks like a FAL model, force FAL provider
         actual_provider = provider
         if model_name.startswith("fal-ai/"):
@@ -80,7 +80,7 @@ def inspect_visual_content(file_path_or_url: str, prompt: str, cfg: Config) -> s
         return f"File Preparation Failed: {e}"
 
     # 2. Attempt 1: Targeted Model on Configured Provider
-    res = _call_vision(target_model, requested_provider)
+    res = _call_vision(target_model, requested_provider, b64_data, mime_type, content)
     if not res.startswith("ERROR:"):
         return res
 
@@ -88,10 +88,10 @@ def inspect_visual_content(file_path_or_url: str, prompt: str, cfg: Config) -> s
     if requested_provider == "fal":
         # If the primary FAL model failed, try a very stable one on FAL
         fallback_model = "fal-ai/moondream2" 
-        res2 = _call_vision(fallback_model, "fal")
+        res2 = _call_vision(fallback_model, "fal", b64_data, mime_type, content)
     else:
         # If the primary Google model failed, try the stable Flash model
-        res2 = _call_vision("gemini-1.5-flash", "google")
+        res2 = _call_vision("gemini-1.5-flash", "google", b64_data, mime_type, content)
     
     if not res2.startswith("ERROR:"):
         return res2
@@ -99,7 +99,7 @@ def inspect_visual_content(file_path_or_url: str, prompt: str, cfg: Config) -> s
     # 4. Attempt 3: Cross-Provider Ultimate Last Resort (Gemini Flash)
     if requested_provider == "fal":
         log.warning("[vision] All FAL attempts failed. Triggering ultimate last resort: gemini-1.5-flash on Google")
-        ultimate_res = _call_vision("gemini-1.5-flash", "google")
+        ultimate_res = _call_vision("gemini-1.5-flash", "google", b64_data, mime_type, content)
         if not ultimate_res.startswith("ERROR:"):
             return ultimate_res
         return f"All Vision Attempts Failed. Final Error: {ultimate_res}"

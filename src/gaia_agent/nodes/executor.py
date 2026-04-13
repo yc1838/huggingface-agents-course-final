@@ -103,13 +103,19 @@ def make_executor_node(model, tools, caveman: bool = False, caveman_mode: str = 
                 name = tool_call["name"]
                 args = tool_call.get("args", {})
                 log.info("[executor] calling tool=%s args=%s", name, str(args))
-                result = tools_by_name[name].invoke(args)
-                result_str = str(result)
-                log.info("[executor] tool result (%d chars): %s", len(result_str), result_str)
-                
-                # Check for failure (Tracebacks)
-                if "Traceback (most recent call last):" in result_str or "Error:" in result_str:
-                    log.warning("[executor] tool call failed: %s", name)
+                try:
+                    result = tools_by_name[name].invoke(args)
+                    result_str = str(result)
+                    log.info("[executor] tool result (%d chars): %s", len(result_str), result_str)
+                    
+                    # Check for failure (Tracebacks or explicit Error markers)
+                    if "Traceback (most recent call last):" in result_str or "Error:" in result_str:
+                        log.warning("[executor] tool call failed: %s", name)
+                        result_str = f"The tool executed but returned the following error: {result_str}. Please consider this error as an observation and adjust your next action accordingly."
+                        step_failed = True
+                except Exception as e:
+                    log.error("[executor] tool exception in %s: %s", name, e)
+                    result_str = f"The tool executed but returned the following error: {e}. Please consider this error as an observation and adjust your next action accordingly."
                     step_failed = True
                 
                 # Special handling for Todo tools

@@ -11,6 +11,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import logging
 import os
 import sys
@@ -77,7 +78,6 @@ def main() -> None:
 
     # Default to local-env behavior. The --model flag will only be used if GAIA_STRONG_MODEL is not set.
     if args.model != "gemini-3-flash-preview" or not cfg.strong_model:
-        import dataclasses
         cfg = dataclasses.replace(
             cfg,
             cheap_provider="google",
@@ -100,7 +100,6 @@ def main() -> None:
         source = "ENV: USE_GEMMA_4=TRUE" if use_gemma4 else None
 
     if use_gemma4:
-        import dataclasses
         banner_source = source or "DEFAULT: OFF"
         print("\n" + "!"*80, flush=True)
         print(f"!!! OVERRIDING ALL TIERED MODELS TO gemma-4-31b-it ({source}) !!!".center(80), flush=True)
@@ -116,7 +115,6 @@ def main() -> None:
         )
 
     # Apply Caveman flags
-    import dataclasses
     cfg = dataclasses.replace(
         cfg,
         caveman=args.cavemen if args.cavemen else cfg.caveman,
@@ -171,14 +169,16 @@ def main() -> None:
 
     correct = 0
     failed_ids = []
+
+    # Normalize: case-insensitive, strip whitespace, hyphens->spaces
+    # (matches GAIA's quasi-exact-match with punctuation normalization)
+    def _norm(s: str) -> str:
+        return str(s).strip().lower().replace("-", " ")
+
     for q in questions:
         tid = q["task_id"]
         got = answers_by_id.get(tid, "")
         expected = q.get("expected_answer", "")
-        # Normalize: case-insensitive, strip whitespace, hyphens→spaces
-        # (matches GAIA's quasi-exact-match with punctuation normalization)
-        def _norm(s: str) -> str:
-            return str(s).strip().lower().replace("-", " ")
         ok = _norm(got) == _norm(expected)
         if ok:
             correct += 1

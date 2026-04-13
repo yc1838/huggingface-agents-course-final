@@ -7,7 +7,7 @@ def route_next(state) -> str:
     if state["step_idx"] >= len(state["plan"]):
         return "verifier"
     
-    # Route based on the domain determined by the Orchestrator
+    # Route based on the domain determined by the State Manager
     domain = state.get("current_domain") or "general"
     valid_domains = ["math", "research", "vision", "audio", "file", "general"]
     if domain not in valid_domains:

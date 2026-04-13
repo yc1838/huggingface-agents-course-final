@@ -36,18 +36,12 @@ class GaiaAgent:
         self.strong = get_strong_model(self.cfg)
         self.extra_strong = get_extra_strong_model(self.cfg)
         
-        # FINAL OVERRIDE: If the provider in cfg is NOT what we expect from .env, 
-        # it might be due to a race condition or export lock. Re-initialize from fresh env.
-        if os.getenv("GAIA_STRONG_PROVIDER") == "lmstudio":
-            self.strong = get_strong_model(self.cfg)
-
         file_dir = Path(self.cfg.checkpoint_dir) / "files"
         file_dir.mkdir(parents=True, exist_ok=True)
         perception = make_perception_node(self.client, file_dir)
         self.graph = build_graph(
             perception_node=perception,
             planner_model=self.extra_strong,
-            orchestrator_model=self.cheap,
             strong_model=self.strong,
             cheap_model=self.cheap,
             verifier_model=self.strong,

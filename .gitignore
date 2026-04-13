@@ -10,4 +10,4 @@ dist/
 data/
 .env
 .env.example
-gaia*.log
+*.log
